@@ -1,4 +1,4 @@
-const API_BASE = '/api';
+const API_BASE = import.meta.VITE.API.URL || '/api';
 
 export async function apiRequest(endpoint, options = {}) {
   const token = localStorage.getItem('edunexa_token');
