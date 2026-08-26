@@ -49,7 +49,16 @@ export default function TermReportCardPage() {
   const [downloadingMap, setDownloadingMap] = useState({});
 
   const handleDownload = async (key, endpoint, defaultFilename) => {
-    if (!isValidId(selectedGroupId)) return;
+    if (!isValidId(selectedGroupId)) {
+      alert('Please select a valid term examination group.');
+      return;
+    }
+
+    if (rankingData && rankingData.studentReports?.length === 0) {
+      alert('No result data is available to generate this PDF.');
+      return;
+    }
+
     if (downloadingMap[key]) return;
     setDownloadingMap((prev) => ({ ...prev, [key]: true }));
     try {
@@ -189,7 +198,7 @@ export default function TermReportCardPage() {
   // Load Tab Content on Change
   useEffect(() => {
     if (isValidId(selectedGroupId)) {
-      if (activeTab === 'matrix') fetchClassMatrix(selectedGroupId);
+      if (activeTab === 'matrix' || activeTab === 'export') fetchClassMatrix(selectedGroupId);
       if (activeTab === 'analytics') fetchAnalytics(selectedGroupId);
     }
   }, [selectedGroupId, activeTab, fetchClassMatrix, fetchAnalytics]);
