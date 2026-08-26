@@ -49,6 +49,7 @@ export default function TermReportCardPage() {
   const [downloadingMap, setDownloadingMap] = useState({});
 
   const handleDownload = async (key, endpoint, defaultFilename) => {
+    if (!isValidId(selectedGroupId)) return;
     if (downloadingMap[key]) return;
     setDownloadingMap((prev) => ({ ...prev, [key]: true }));
     try {
@@ -90,6 +91,12 @@ export default function TermReportCardPage() {
   const [analyticsData, setAnalyticsData] = useState(null);
   const [analyticsLoading, setAnalyticsLoading] = useState(false);
 
+  const isValidId = (value) => {
+    if (!value || value === 'undefined' || value === 'null') return false;
+    const id = Number(value);
+    return Number.isInteger(id) && id > 0;
+  };
+
   // Fetch all Exam Groups
   const fetchExamGroups = useCallback(async () => {
     try {
@@ -97,7 +104,7 @@ export default function TermReportCardPage() {
       const res = await api.get('/exam-groups');
       if (res.data.success) {
         setExamGroups(res.data.data);
-        if (!selectedGroupId && res.data.data.length > 0) {
+        if (!isValidId(selectedGroupId) && res.data.data.length > 0) {
           setSelectedGroupId(String(res.data.data[0].id));
         }
       }
@@ -115,7 +122,11 @@ export default function TermReportCardPage() {
 
   // Fetch Selected Exam Group Details
   const fetchGroupDetails = useCallback(async (groupId) => {
-    if (!groupId) return;
+    if (!isValidId(groupId)) {
+      setExamGroup(null);
+      setLoading(false);
+      return;
+    }
     try {
       setLoading(true);
       const res = await api.get(`/exam-groups/${groupId}`);
@@ -135,14 +146,17 @@ export default function TermReportCardPage() {
   }, []);
 
   useEffect(() => {
-    if (selectedGroupId) {
+    if (isValidId(selectedGroupId)) {
       fetchGroupDetails(selectedGroupId);
+    } else {
+      setExamGroup(null);
+      setLoading(false);
     }
   }, [selectedGroupId, fetchGroupDetails]);
 
   // Fetch Class Matrix Data
   const fetchClassMatrix = useCallback(async (groupId) => {
-    if (!groupId) return;
+    if (!isValidId(groupId)) return;
     try {
       setMatrixLoading(true);
       const res = await api.get(`/exam-groups/${groupId}/class-sheet`);
@@ -158,7 +172,7 @@ export default function TermReportCardPage() {
 
   // Fetch Analytics
   const fetchAnalytics = useCallback(async (groupId) => {
-    if (!groupId) return;
+    if (!isValidId(groupId)) return;
     try {
       setAnalyticsLoading(true);
       const res = await api.get(`/exam-groups/${groupId}/analytics`);
@@ -174,7 +188,7 @@ export default function TermReportCardPage() {
 
   // Load Tab Content on Change
   useEffect(() => {
-    if (selectedGroupId) {
+    if (isValidId(selectedGroupId)) {
       if (activeTab === 'matrix') fetchClassMatrix(selectedGroupId);
       if (activeTab === 'analytics') fetchAnalytics(selectedGroupId);
     }
@@ -269,6 +283,7 @@ export default function TermReportCardPage() {
 
   // Load Single Student Preview
   const handleOpenStudentPreview = async (studentId) => {
+    if (!isValidId(selectedGroupId) || !studentId) return;
     setPreviewStudentId(studentId);
     setActiveTab('preview');
     try {
@@ -288,7 +303,7 @@ export default function TermReportCardPage() {
 
   // Save Remarks
   const handleSaveRemarks = async () => {
-    if (!selectedGroupId || !previewStudentId) return;
+    if (!isValidId(selectedGroupId) || !previewStudentId) return;
     try {
       setSavingRemarks(true);
       const res = await api.patch(`/exam-groups/${selectedGroupId}/remarks/${previewStudentId}`, {
@@ -308,7 +323,7 @@ export default function TermReportCardPage() {
 
   // Release / Unrelease Exam Group
   const handleToggleRelease = async () => {
-    if (!examGroup) return;
+    if (!examGroup || !isValidId(examGroup.id)) return;
     const isReleased = examGroup.status === 'RELEASED';
     const confirmMsg = isReleased
       ? 'Are you sure you want to unpublish this term report card? Students and Parents will lose access.'

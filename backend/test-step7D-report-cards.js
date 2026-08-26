@@ -301,6 +301,38 @@ async function runStep7DTests() {
     assert(testExamGroup.instituteId === instituteAId, 'ExamGroup instituteId assigned strictly from req.instituteId');
     assert(testExamGroup.status === 'DRAFT', 'Initial status is DRAFT');
 
+    // Test Invalid Exam Group ID Validations on getExamGroupDetails
+    console.log('\n3b. Testing Invalid Exam Group ID Validations on getExamGroupDetails...');
+    const undefinedRes = await fetch(`${BASE_URL}/exam-groups/undefined`, {
+      headers: { Authorization: `Bearer ${adminTokenA}` },
+    });
+    assert(undefinedRes.status === 400, 'GET /api/exam-groups/undefined returned 400 Bad Request');
+
+    const nullRes = await fetch(`${BASE_URL}/exam-groups/null`, {
+      headers: { Authorization: `Bearer ${adminTokenA}` },
+    });
+    assert(nullRes.status === 400, 'GET /api/exam-groups/null returned 400 Bad Request');
+
+    const zeroRes = await fetch(`${BASE_URL}/exam-groups/0`, {
+      headers: { Authorization: `Bearer ${adminTokenA}` },
+    });
+    assert(zeroRes.status === 400, 'GET /api/exam-groups/0 returned 400 Bad Request');
+
+    const abcRes = await fetch(`${BASE_URL}/exam-groups/abc`, {
+      headers: { Authorization: `Bearer ${adminTokenA}` },
+    });
+    assert(abcRes.status === 400, 'GET /api/exam-groups/abc returned 400 Bad Request');
+
+    const nonExistentRes = await fetch(`${BASE_URL}/exam-groups/999999`, {
+      headers: { Authorization: `Bearer ${adminTokenA}` },
+    });
+    assert(nonExistentRes.status === 404, 'GET /api/exam-groups/999999 returned 404 Not Found');
+
+    const validDetailsRes = await fetch(`${BASE_URL}/exam-groups/${testExamGroup.id}`, {
+      headers: { Authorization: `Bearer ${adminTokenA}` },
+    });
+    assert(validDetailsRes.status === 200, 'GET /api/exam-groups/<valid_id> returned 200 OK');
+
     // -------------------------------------------------------------
     // 4. Attach Subject Exams to Group (With validation)
     // -------------------------------------------------------------

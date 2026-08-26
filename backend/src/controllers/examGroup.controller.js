@@ -148,10 +148,24 @@ export const getExamGroups = async (req, res) => {
 export const getExamGroupDetails = async (req, res) => {
   try {
     const instituteId = req.instituteId;
-    const { id } = req.params;
+    const rawId = req.params.id;
+    const examGroupId = Number(rawId);
+
+    if (
+      !rawId ||
+      rawId === 'undefined' ||
+      rawId === 'null' ||
+      !Number.isInteger(examGroupId) ||
+      examGroupId <= 0
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: 'Valid exam group ID is required.',
+      });
+    }
 
     const group = await prisma.examGroup.findFirst({
-      where: { id: Number(id), instituteId },
+      where: { id: examGroupId, instituteId },
       include: {
         academicYear: true,
         class: true,
