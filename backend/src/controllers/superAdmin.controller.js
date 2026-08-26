@@ -394,8 +394,8 @@ export const createInstitute = async (req, res) => {
     }
 
     // Provision an initial onboarding subscription snapshot for the new institute
-    const starterPlan = await prisma.subscriptionPlan.findFirst({
-      where: { isActive: true },
+    let starterPlan = await prisma.subscriptionPlan.findFirst({
+      where: { isActive: true, displayOrder: { gte: 1 } },
       include: {
         features: {
           where: { isEnabled: true },
@@ -404,6 +404,19 @@ export const createInstitute = async (req, res) => {
       },
       orderBy: { displayOrder: 'asc' },
     });
+
+    if (!starterPlan) {
+      starterPlan = await prisma.subscriptionPlan.findFirst({
+        where: { isActive: true },
+        include: {
+          features: {
+            where: { isEnabled: true },
+            include: { feature: true },
+          },
+        },
+        orderBy: { id: 'asc' },
+      });
+    }
 
     if (starterPlan) {
       const featuresSnapshot = starterPlan.features.map((pf) => ({

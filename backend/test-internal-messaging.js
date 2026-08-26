@@ -57,6 +57,24 @@ async function runMessagingTestSuite() {
     throw new Error('Institute A must have at least an Admin and a Teacher.');
   }
 
+  if (!teacherA.teacher) {
+    teacherA.teacher = await prisma.teacher.create({
+      data: { userId: teacherA.id, instituteId: instAId, name: 'Teacher A', employeeId: `EMP_${Date.now()}` },
+    });
+  }
+
+  if (studentA && !studentA.student) {
+    studentA.student = await prisma.student.create({
+      data: { userId: studentA.id, instituteId: instAId, name: 'Student A', admissionNumber: `ADM_${Date.now()}` },
+    });
+  }
+
+  if (parentA && !parentA.parent) {
+    parentA.parent = await prisma.parent.create({
+      data: { userId: parentA.id, instituteId: instAId, name: 'Parent A' },
+    });
+  }
+
   // Ensure an Academic Class & Assignment linking TeacherA and StudentA
   let testClass = await prisma.class.findFirst({
     where: { instituteId: instAId },

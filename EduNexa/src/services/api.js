@@ -1,4 +1,4 @@
-const API_BASE = import.meta.env.VITE_API_URL || '/api';
+export const API_BASE = import.meta.env.VITE_API_URL || '/api';
 
 export async function apiRequest(endpoint, options = {}) {
   const token = localStorage.getItem('edunexa_token');
@@ -178,6 +178,17 @@ export async function getGalleryStreamTicket(mediaId) {
  */
 export async function fetchGalleryMediaBlobUrl(mediaId) {
   return await fetchProtectedAssetBlobUrl(`/gallery/media/${mediaId}/stream`);
+}
+
+/**
+ * Safely construct the full authenticated stream URL for native video element playback.
+ * 
+ * @param {number|string} mediaId 
+ * @param {string} ticket 
+ * @returns {string} - Full video stream URL resolving against backend base URL
+ */
+export function getGalleryVideoStreamUrl(mediaId, ticket) {
+  return `${API_BASE}/gallery/media/${mediaId}/stream?ticket=${encodeURIComponent(ticket)}`;
 }
 
 /**
@@ -385,7 +396,7 @@ export const api = {
       ...opts,
     }).then((data) => ({ data })),
   delete: (url, opts) => apiRequest(url, { method: 'DELETE', ...opts }).then((data) => ({ data })),
-  defaults: { baseURL: '/api' },
+  defaults: { baseURL: API_BASE },
 };
 
 export default apiRequest;

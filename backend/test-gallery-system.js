@@ -47,19 +47,42 @@ async function runGalleryTestSuite() {
   const instAId = testInstA.id;
   const activeSub = testInstA.subscriptions?.[0];
 
-  // Find Admin, Student, Teacher, Parent for Institute A
-  const adminUser = await prisma.user.findFirst({
+  // Find or Create Admin, Student, Teacher, Parent for Institute A
+  let adminUser = await prisma.user.findFirst({
     where: { instituteId: instAId, role: 'ADMIN', isActive: true },
   });
-  const studentUser = await prisma.user.findFirst({
+  if (!adminUser) {
+    adminUser = await prisma.user.create({
+      data: { username: `admin_${Date.now()}`, email: `admin_${Date.now()}@instA.com`, passwordHash: 'hashed_pw', role: 'ADMIN', instituteId: instAId, isActive: true },
+    });
+  }
+
+  let studentUser = await prisma.user.findFirst({
     where: { instituteId: instAId, role: 'STUDENT', isActive: true },
   });
-  const teacherUser = await prisma.user.findFirst({
+  if (!studentUser) {
+    studentUser = await prisma.user.create({
+      data: { username: `student_${Date.now()}`, email: `student_${Date.now()}@instA.com`, passwordHash: 'hashed_pw', role: 'STUDENT', instituteId: instAId, isActive: true },
+    });
+  }
+
+  let teacherUser = await prisma.user.findFirst({
     where: { instituteId: instAId, role: 'TEACHER', isActive: true },
   });
-  const parentUser = await prisma.user.findFirst({
+  if (!teacherUser) {
+    teacherUser = await prisma.user.create({
+      data: { username: `teacher_${Date.now()}`, email: `teacher_${Date.now()}@instA.com`, passwordHash: 'hashed_pw', role: 'TEACHER', instituteId: instAId, isActive: true },
+    });
+  }
+
+  let parentUser = await prisma.user.findFirst({
     where: { instituteId: instAId, role: 'PARENT', isActive: true },
   });
+  if (!parentUser) {
+    parentUser = await prisma.user.create({
+      data: { username: `parent_${Date.now()}`, email: `parent_${Date.now()}@instA.com`, passwordHash: 'hashed_pw', role: 'PARENT', instituteId: instAId, isActive: true },
+    });
+  }
 
   // Find or Create Test Institute B (for cross-tenant testing)
   let testInstB = await prisma.institute.findFirst({

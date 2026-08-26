@@ -198,6 +198,7 @@ export const approvePayment = async (req, res, next) => {
       // 3. Create In-App Notification for Institute Admin
       await tx.notification.create({
         data: {
+          instituteId: payment.instituteId || null,
           userId: instAdmin?.id || req.user.id,
           title: 'EduNexa Subscription Approved & Activated',
           message: `Your EduNexa subscription for '${payment.subscription.planNameSnapshot}' has been verified and activated. Valid until ${endDate.toLocaleDateString()}.`,
@@ -289,6 +290,7 @@ export const rejectPayment = async (req, res, next) => {
       // 3. Create In-App Notification for Institute Admin
       await tx.notification.create({
         data: {
+          instituteId: payment.instituteId || null,
           userId: instAdmin?.id || req.user.id,
           title: 'Subscription Payment Verification Rejected',
           message: `Your payment receipt for plan '${payment.subscription.planNameSnapshot}' was rejected. Reason: ${rejectionReason}. Please visit your Subscription portal to resubmit with a valid receipt.`,

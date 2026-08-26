@@ -25,7 +25,13 @@ import {
   X,
   FileSpreadsheet,
 } from 'lucide-react';
-import { api, downloadAuthenticatedFile } from '../../../services/api';
+import {
+  api,
+  downloadAuthenticatedFile,
+  fetchProtectedAssetBlobUrl,
+  revokeProtectedAssetBlobUrl,
+  openAuthenticatedFileInNewWindow,
+} from '../../../services/api';
 
 export default function WrittenMarkingPage() {
   const { id: examId } = useParams();
@@ -48,6 +54,54 @@ export default function WrittenMarkingPage() {
   const [auditReason, setAuditReason] = useState('');
   const [showAuditModal, setShowAuditModal] = useState(false);
   const [pendingAction, setPendingAction] = useState(null); // 'SAVE_PUBLISHED' | 'PUBLISH_SINGLE'
+
+  // PDF Preview State
+  const [pdfBlobUrl, setPdfBlobUrl] = useState(null);
+  const [loadingPdf, setLoadingPdf] = useState(false);
+  const [pdfError, setPdfError] = useState(null);
+
+  useEffect(() => {
+    let active = true;
+    let currentBlob = null;
+
+    const loadAnswerPdf = async () => {
+      if (!selectedStudent || !selectedStudent.hasSubmission || !examId) {
+        setPdfBlobUrl(null);
+        setPdfError(null);
+        setLoadingPdf(false);
+        return;
+      }
+
+      setLoadingPdf(true);
+      setPdfError(null);
+      try {
+        const url = await fetchProtectedAssetBlobUrl(`/exams/${examId}/submissions/${selectedStudent.studentId}/answer-pdf`);
+        if (active) {
+          currentBlob = url;
+          setPdfBlobUrl(url);
+        } else {
+          revokeProtectedAssetBlobUrl(url);
+        }
+      } catch (err) {
+        if (active) {
+          setPdfError(err.message || 'Failed to load answer document');
+        }
+      } finally {
+        if (active) {
+          setLoadingPdf(false);
+        }
+      }
+    };
+
+    loadAnswerPdf();
+
+    return () => {
+      active = false;
+      if (currentBlob) {
+        revokeProtectedAssetBlobUrl(currentBlob);
+      }
+    };
+  }, [selectedStudent?.studentId, selectedStudent?.hasSubmission, examId]);
 
   // Spreadsheet Bulk Table State
   const [bulkMarksMap, setBulkMarksMap] = useState({});
@@ -347,9 +401,7 @@ export default function WrittenMarkingPage() {
       const formData = new FormData();
       formData.append('file', csvFile);
 
-      const res = await api.post(`/exams/${examId}/submissions/preview-csv`, formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      });
+      const res = await api.post(`/exams/${examId}/submissions/preview-csv`, formData);
 
       if (res.data?.success) {
         setCsvPreviewData(res.data.data);
@@ -751,24 +803,36 @@ export default function WrittenMarkingPage() {
                   </div>
 
                   {selectedStudent.hasSubmission && (
-                    <a
-                      href={`${api.defaults.baseURL || '/api'}/exams/${examId}/submissions/${selectedStudent.studentId}/answer-pdf`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-[11px] font-bold text-slate-200 border border-slate-700 flex items-center gap-1.5 transition"
+                    <button
+                      type="button"
+                      onClick={() => openAuthenticatedFileInNewWindow(`/exams/${examId}/submissions/${selectedStudent.studentId}/answer-pdf`)}
+                      className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-[11px] font-bold text-slate-200 border border-slate-700 flex items-center gap-1.5 transition cursor-pointer"
                     >
                       <Eye className="w-3.5 h-3.5" /> Open in New Tab
-                    </a>
+                    </button>
                   )}
                 </div>
 
                 <div className="flex-1 bg-slate-50 relative">
                   {selectedStudent.hasSubmission ? (
-                    <iframe
-                      src={`${api.defaults.baseURL || '/api'}/exams/${examId}/submissions/${selectedStudent.studentId}/answer-pdf`}
-                      title="Answer Paper Preview"
-                      className="w-full h-full border-none"
-                    />
+                    loadingPdf ? (
+                      <div className="flex flex-col items-center justify-center h-full p-8 text-center">
+                        <RefreshCw className="w-8 h-8 text-indigo-500 animate-spin mb-2" />
+                        <p className="text-xs font-bold text-slate-600">Loading answer document...</p>
+                      </div>
+                    ) : pdfError ? (
+                      <div className="flex flex-col items-center justify-center h-full p-8 text-center">
+                        <AlertCircle className="w-10 h-10 text-rose-500 mb-2" />
+                        <p className="text-xs font-bold text-rose-600 mb-1">Failed to load preview</p>
+                        <p className="text-[11px] text-slate-500">{pdfError}</p>
+                      </div>
+                    ) : pdfBlobUrl ? (
+                      <iframe
+                        src={pdfBlobUrl}
+                        title="Answer Paper Preview"
+                        className="w-full h-full border-none"
+                      />
+                    ) : null
                   ) : (
                     <div className="flex flex-col items-center justify-center h-full p-8 text-center">
                       <AlertCircle className="w-12 h-12 text-amber-500 mb-3" />

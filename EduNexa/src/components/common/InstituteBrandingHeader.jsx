@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import EduNexaLogo from './EduNexaLogo';
-import { fetchProtectedAssetBlobUrl, revokeProtectedAssetBlobUrl } from '../../services/api';
+import { fetchProtectedAssetBlobUrl, revokeProtectedAssetBlobUrl, API_BASE } from '../../services/api';
 import { Building, Globe, Mail, Phone, MapPin, Award, CheckCircle2, ShieldCheck } from 'lucide-react';
 
 export const getInstituteInitials = (name) => {
@@ -11,6 +11,20 @@ export const getInstituteInitials = (name) => {
     return parts[0].slice(0, 2).toUpperCase();
   }
   return (parts[0][0] + parts[1][0]).toUpperCase();
+};
+
+export const resolveInstituteLogoUrl = (rawLogo) => {
+  if (!rawLogo || typeof rawLogo !== 'string') return null;
+  const trimmed = rawLogo.trim();
+  if (trimmed.startsWith('blob:') || trimmed.startsWith('data:') || trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+    return trimmed;
+  }
+  if (trimmed.startsWith('/uploads/') || trimmed.startsWith('uploads/')) {
+    const backendOrigin = API_BASE.replace(/\/api\/?$/, '');
+    const cleanPath = trimmed.startsWith('/') ? trimmed : `/${trimmed}`;
+    return `${backendOrigin}${cleanPath}`;
+  }
+  return trimmed;
 };
 
 export default function InstituteBrandingHeader({
@@ -32,7 +46,7 @@ export default function InstituteBrandingHeader({
 
   const name = institute?.name || 'EduNexa Institute';
   const code = institute?.code || 'EDU';
-  const logo = institute?.logo;
+  const logo = resolveInstituteLogoUrl(institute?.logo);
   const initials = getInstituteInitials(name);
 
   // Effective Signature & Stamp Sources (Prioritize passed props, then institute object URLs, then internal fetched URLs)

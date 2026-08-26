@@ -21,7 +21,7 @@ lerna-debug.log*
 backend/backups/
 backend/uploads/
 
-# Editor / OS files
+# Editor / OS
 .vscode/*
 !.vscode/extensions.json
 .idea/
@@ -31,3 +31,7 @@ backend/uploads/
 *.njsproj
 *.sln
 *.sw?
+
+# Temporary production QA scripts
+backend/scripts/cleanup-smoke-test-350.js
+backend/scripts/run-production-smoke-test.js

@@ -29,6 +29,7 @@ import {
   fetchGalleryMediaBlobUrl,
   revokeProtectedAssetBlobUrl,
   getGalleryStreamTicket,
+  getGalleryVideoStreamUrl,
 } from '../../../services/api';
 import { getEmbedUrl } from '../../../components/gallery/InstituteGalleryViewer';
 import GlassCard from '../../../components/common/GlassCard';
@@ -442,7 +443,7 @@ export default function GalleryManagementPage() {
         setVideoLoading(true);
         try {
           const ticket = await getGalleryStreamTicket(media.id);
-          setVideoStreamUrl(`/api/gallery/media/${media.id}/stream?ticket=${encodeURIComponent(ticket)}`);
+          setVideoStreamUrl(getGalleryVideoStreamUrl(media.id, ticket));
         } catch (err) {
           console.error('Failed to get ticket:', err);
           setVideoError(err.message || 'Unable to play this video.');

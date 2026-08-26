@@ -153,24 +153,26 @@ export default function LoginPage() {
             </p>
           </div>
 
-          {/* Quick Demo Access Shortcuts */}
-          <div className="mt-8 pt-6 border-t border-slate-100">
-            <p className="text-xs font-bold uppercase tracking-wider text-slate-400 text-center mb-3">
-              One-Click Demo Roles
-            </p>
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-              {quickLogins.map((acc) => (
-                <button
-                  key={acc.role}
-                  type="button"
-                  onClick={() => handleQuickLogin(acc)}
-                  className={`text-xs font-bold py-2 px-2.5 rounded-xl border text-center transition-transform active:scale-95 shadow-2xs ${acc.color}`}
-                >
-                  {acc.role}
-                </button>
-              ))}
+          {/* Quick Demo Access Shortcuts (Hidden in Production when VITE_ENABLE_DEMO_LOGIN=false) */}
+          {(import.meta.env.VITE_ENABLE_DEMO_LOGIN === 'true' || (import.meta.env.DEV && import.meta.env.VITE_ENABLE_DEMO_LOGIN !== 'false')) && (
+            <div className="mt-8 pt-6 border-t border-slate-100">
+              <p className="text-xs font-bold uppercase tracking-wider text-slate-400 text-center mb-3">
+                One-Click Demo Roles
+              </p>
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                {quickLogins.map((acc) => (
+                  <button
+                    key={acc.role}
+                    type="button"
+                    onClick={() => handleQuickLogin(acc)}
+                    className={`text-xs font-bold py-2 px-2.5 rounded-xl border text-center transition-transform active:scale-95 shadow-2xs ${acc.color}`}
+                  >
+                    {acc.role}
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
         </GlassCard>
       </div>
     </div>

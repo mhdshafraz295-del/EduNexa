@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { apiRequest } from '../../../services/api';
 import {
   UserCheck,
   Calendar,
@@ -83,19 +84,10 @@ export default function AttendancePage() {
   const fetchAcademicMetadata = async () => {
     setLoadingMeta(true);
     try {
-      const token = localStorage.getItem('token');
-      const headers = { Authorization: `Bearer ${token}` };
-
-      const [clsRes, subRes, yrRes] = await Promise.all([
-        fetch('http://localhost:5000/api/academic/classes', { headers }),
-        fetch('http://localhost:5000/api/academic/subjects', { headers }),
-        fetch('http://localhost:5000/api/academic/years', { headers }),
-      ]);
-
       const [clsData, subData, yrData] = await Promise.all([
-        clsRes.json(),
-        subRes.json(),
-        yrRes.json(),
+        apiRequest('/academic/classes'),
+        apiRequest('/academic/subjects'),
+        apiRequest('/academic/years'),
       ]);
 
       if (clsData.success) {
@@ -129,15 +121,11 @@ export default function AttendancePage() {
     setSaveSuccessMessage('');
     setSaveErrorMessage('');
     try {
-      const token = localStorage.getItem('token');
-      let url = `http://localhost:5000/api/attendance/students-for-marking?classId=${selectedClassId}&date=${attendanceDate}`;
+      let url = `/attendance/students-for-marking?classId=${selectedClassId}&date=${attendanceDate}`;
       if (selectedSubjectId) url += `&subjectId=${selectedSubjectId}`;
       if (selectedAcademicYearId) url += `&academicYearId=${selectedAcademicYearId}`;
 
-      const res = await fetch(url, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const json = await res.json();
+      const json = await apiRequest(url);
 
       if (json.success) {
         setStudents(json.data.students || []);
@@ -150,7 +138,8 @@ export default function AttendancePage() {
       }
     } catch (err) {
       console.error('Error fetching students:', err);
-      setSaveErrorMessage('Failed to connect to server.');
+      setStudents([]);
+      setSaveErrorMessage(err.message || 'Failed to connect to server.');
     } finally {
       setLoadingStudents(false);
     }
@@ -160,14 +149,10 @@ export default function AttendancePage() {
   const fetchAttendanceHistory = async () => {
     setLoadingHistory(true);
     try {
-      const token = localStorage.getItem('token');
-      let url = 'http://localhost:5000/api/attendance/sessions';
+      let url = '/attendance/sessions';
       if (historyClassFilter) url += `?classId=${historyClassFilter}`;
 
-      const res = await fetch(url, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const json = await res.json();
+      const json = await apiRequest(url);
       if (json.success) {
         setSessions(json.data || []);
       }
@@ -190,11 +175,7 @@ export default function AttendancePage() {
   const fetchAttendanceAnalytics = async () => {
     setLoadingAnalytics(true);
     try {
-      const token = localStorage.getItem('token');
-      const res = await fetch('http://localhost:5000/api/attendance/analytics', {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const json = await res.json();
+      const json = await apiRequest('/attendance/analytics');
       if (json.success) {
         setAnalyticsData(json.data);
       }
@@ -235,7 +216,6 @@ export default function AttendancePage() {
     setSaveErrorMessage('');
 
     try {
-      const token = localStorage.getItem('token');
       const payload = {
         classId: parseInt(selectedClassId, 10),
         subjectId: selectedSubjectId ? parseInt(selectedSubjectId, 10) : null,
@@ -249,16 +229,10 @@ export default function AttendancePage() {
         })),
       };
 
-      const res = await fetch('http://localhost:5000/api/attendance/sessions', {
+      const json = await apiRequest('/attendance/sessions', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
         body: JSON.stringify(payload),
       });
-
-      const json = await res.json();
 
       if (json.success) {
         setSaveSuccessMessage(json.message || 'Attendance saved successfully!');
@@ -268,7 +242,7 @@ export default function AttendancePage() {
         setSaveErrorMessage(json.message || 'Failed to save attendance.');
       }
     } catch (err) {
-      setSaveErrorMessage('Network error while saving attendance.');
+      setSaveErrorMessage(err.message || 'Network error while saving attendance.');
     } finally {
       setSavingAttendance(false);
     }
@@ -281,12 +255,9 @@ export default function AttendancePage() {
     }
 
     try {
-      const token = localStorage.getItem('token');
-      const res = await fetch(`http://localhost:5000/api/attendance/sessions/${sessionId}`, {
+      const json = await apiRequest(`/attendance/sessions/${sessionId}`, {
         method: 'DELETE',
-        headers: { Authorization: `Bearer ${token}` },
       });
-      const json = await res.json();
       if (json.success) {
         setSessions((prev) => prev.filter((s) => s.id !== sessionId));
         if (selectedSessionDetail?.id === sessionId) {
@@ -296,7 +267,7 @@ export default function AttendancePage() {
         alert(json.message || 'Failed to delete session.');
       }
     } catch (err) {
-      alert('Network error while deleting session.');
+      alert(err.message || 'Network error while deleting session.');
     }
   };
 

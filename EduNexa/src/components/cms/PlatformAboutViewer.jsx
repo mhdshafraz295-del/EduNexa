@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { apiRequest } from '../../services/api';
+import { apiRequest, API_BASE } from '../../services/api';
 import GlassCard from '../common/GlassCard';
 import EduNexaLogo from '../common/EduNexaLogo';
 import {
@@ -75,14 +75,22 @@ export function resolveCmsAssetUrl(assetPath) {
       queryParams.set('token', token);
     }
     const qs = queryParams.toString();
-    return `${basePath}${qs ? `?${qs}` : ''}`;
+    const cleanEndpoint = basePath.startsWith('/api') ? basePath.slice(4) : (basePath.startsWith('/') ? basePath : `/${basePath}`);
+    return `${API_BASE}${cleanEndpoint}${qs ? `?${qs}` : ''}`;
   }
 
   if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
     return trimmed;
   }
 
-  // Relative path normalization (e.g. /uploads/platform-cms/public/...)
+  // If it's an uploaded backend file (e.g. /uploads/platform-cms/public/...)
+  if (trimmed.startsWith('/uploads/') || trimmed.startsWith('uploads/')) {
+    const backendOrigin = API_BASE.replace(/\/api\/?$/, '');
+    const cleanPath = trimmed.startsWith('/') ? trimmed : `/${trimmed}`;
+    return `${backendOrigin}${cleanPath}`;
+  }
+
+  // Relative path normalization for frontend assets (e.g. /logo.png, /assets/...)
   return trimmed.startsWith('/') ? trimmed : `/${trimmed}`;
 }
 

@@ -19,6 +19,7 @@ import {
   fetchGalleryMediaBlobUrl,
   revokeProtectedAssetBlobUrl,
   getGalleryStreamTicket,
+  getGalleryVideoStreamUrl,
 } from '../../services/api';
 import GlassCard from '../common/GlassCard';
 import EmptyState from '../common/EmptyState';
@@ -251,7 +252,7 @@ export default function InstituteGalleryViewer({ role = 'STUDENT' }) {
       try {
         // Request short-lived ticket
         const ticket = await getGalleryStreamTicket(mediaItem.id);
-        setVideoStreamUrl(`/api/gallery/media/${mediaItem.id}/stream?ticket=${encodeURIComponent(ticket)}`);
+        setVideoStreamUrl(getGalleryVideoStreamUrl(mediaItem.id, ticket));
       } catch (err) {
         console.error('Failed to get video stream ticket:', err);
         setVideoError(err.message || 'Unable to play this video.');

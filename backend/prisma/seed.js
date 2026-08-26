@@ -6,35 +6,9 @@ const prisma = new PrismaClient();
 async function main() {
   console.log('🌱 Starting database seed and migration for EduNexa SaaS...');
 
-  // 1. Create or Find Default Demo Institute
-  let demoInstitute = await prisma.institute.findFirst({
-    where: {
-      OR: [
-        { code: 'EDU0001' },
-        { slug: 'edunexa-demo' }
-      ]
-    }
-  });
+  const shouldSeedDemo = process.env.SEED_DEMO_DATA === 'true';
 
-  if (!demoInstitute) {
-    demoInstitute = await prisma.institute.create({
-      data: {
-        name: 'EduNexa Demo Institute',
-        slug: 'edunexa-demo',
-        code: 'EDU0001',
-        email: 'contact@edunexa-demo.lk',
-        phone: '+94 11 234 5678',
-        address: '123 Innovation Way, Colombo 03, Sri Lanka',
-        logo: '/logo.png',
-        isActive: true,
-      }
-    });
-    console.log(`✅ Created default demo institute: ${demoInstitute.name} (${demoInstitute.code})`);
-  } else {
-    console.log(`ℹ️ Found existing demo institute: ${demoInstitute.name} (${demoInstitute.code})`);
-  }
-
-  // 2. Create Platform SUPER_ADMIN (instituteId = null)
+  // 1. Create Platform SUPER_ADMIN (instituteId = null) - System Required
   const superAdminPasswordHash = await bcrypt.hash('SuperAdmin123!', 10);
   const superAdmin = await prisma.user.upsert({
     where: { email: 'superadmin@edunexa.com' },
@@ -53,6 +27,50 @@ async function main() {
     }
   });
   console.log(`✅ Configured Platform SUPER_ADMIN: ${superAdmin.email}`);
+
+  // Preserved Developer / Owner Account
+  await prisma.user.upsert({
+    where: { email: 'mhdshafraz295@gmail.com' },
+    update: {
+      isActive: true,
+    },
+    create: {
+      username: 'mhdshafraz295@gmail.com',
+      email: 'mhdshafraz295@gmail.com',
+      passwordHash: '$2a$10$NpTCW3HHZRtpUBIH2fE3POXn8bGbfwnqYWVrVcYvq9BMc6jEyNeBG',
+      role: 'ADMIN',
+      isActive: true,
+    }
+  });
+
+  if (shouldSeedDemo) {
+    console.log('🧪 Seeding Demo Institute and Sample Users (SEED_DEMO_DATA=true)...');
+    let demoInstitute = await prisma.institute.findFirst({
+      where: {
+        OR: [
+          { code: 'EDU0001' },
+          { slug: 'edunexa-demo' }
+        ]
+      }
+    });
+
+    if (!demoInstitute) {
+      demoInstitute = await prisma.institute.create({
+        data: {
+          name: 'EduNexa Demo Institute',
+          slug: 'edunexa-demo',
+          code: 'EDU0001',
+          email: 'contact@edunexa-demo.lk',
+          phone: '+94 11 234 5678',
+          address: '123 Innovation Way, Colombo 03, Sri Lanka',
+          logo: '/logo.png',
+          isActive: true,
+        }
+      });
+      console.log(`✅ Created default demo institute: ${demoInstitute.name} (${demoInstitute.code})`);
+    } else {
+      console.log(`ℹ️ Found existing demo institute: ${demoInstitute.name} (${demoInstitute.code})`);
+    }
 
   // 3. Create or Link Institute Admin for Demo Institute
   const adminPasswordHash = await bcrypt.hash('Admin123!', 10);
@@ -333,6 +351,9 @@ async function main() {
       where: { id: u.id },
       data: { instituteId: demoInstitute.id }
     });
+  }
+  } else {
+    console.log('ℹ️ Skipping Demo Institute creation (Production Safe Mode: SEED_DEMO_DATA is not set to true).');
   }
 
   // 9. Seed Centralized Feature Catalog

@@ -344,6 +344,7 @@ export const submitPayment = async (req, res, next) => {
         const institute = await tx.institute.findUnique({ where: { id: instituteId } });
         await tx.notification.create({
           data: {
+            instituteId: instituteId || null,
             userId: req.user.id,
             title: 'New Subscription Payment Submitted',
             message: `${institute?.name || 'An institute'} has submitted a payment receipt for plan '${subscription.planNameSnapshot}' (${subscription.currencySnapshot} ${parseFloat(subscription.priceSnapshot).toLocaleString()}). Reference: ${transferReference}`,

@@ -43,6 +43,11 @@ export const getDateRange = (period = 'this_month', customStart = null, customEn
         endDate = new Date(customEnd);
         endDate.setHours(23, 59, 59, 999);
       }
+      if (startDate && endDate && startDate > endDate) {
+        const err = new Error('Start date cannot be after end date.');
+        err.statusCode = 400;
+        throw err;
+      }
       break;
     }
     case 'all_time':
@@ -413,10 +418,14 @@ export const getInvoiceAnalytics = async ({
     summary: {
       totalInvoiced: Math.round(totalInvoiced * 100) / 100,
       totalCollected: Math.round(totalCollected * 100) / 100,
+      totalPaid: Math.round(totalCollected * 100) / 100,
       outstanding: Math.round(periodOutstanding * 100) / 100,
+      totalUnpaid: Math.round(periodOutstanding * 100) / 100,
       overdue: Math.round(overdueAmountTotal * 100) / 100,
+      overdueAmount: Math.round(overdueAmountTotal * 100) / 100,
       collectionRate,
       totalInvoices: invoicesInPeriod.length,
+      invoiceCount: invoicesInPeriod.length,
       paidCount,
       partialCount,
       unpaidCount,
@@ -427,13 +436,19 @@ export const getInvoiceAnalytics = async ({
       currentMonth: {
         invoiced: Math.round(thisMonthInvoiced * 100) / 100,
         collected: Math.round(thisMonthCollected * 100) / 100,
+        totalInvoiced: Math.round(thisMonthInvoiced * 100) / 100,
+        totalPaid: Math.round(thisMonthCollected * 100) / 100,
       },
       previousMonth: {
         invoiced: Math.round(lastMonthInvoiced * 100) / 100,
         collected: Math.round(lastMonthCollected * 100) / 100,
+        totalInvoiced: Math.round(lastMonthInvoiced * 100) / 100,
+        totalPaid: Math.round(lastMonthCollected * 100) / 100,
       },
       invoicedChange,
       collectedChange,
+      invoicedChangePercent: invoicedChange,
+      paidChangePercent: collectedChange,
     },
     monthlyTrend,
     statusBreakdown,

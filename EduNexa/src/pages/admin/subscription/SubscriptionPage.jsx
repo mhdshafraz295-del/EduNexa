@@ -164,19 +164,12 @@ export default function SubscriptionPage() {
       formData.append('transferDate', transferDate);
       formData.append('receipt', receiptFile);
 
-      // Use fetch directly for multipart formData with auth token
-      const token = localStorage.getItem('edunexa_token');
-      const response = await fetch('/api/subscription/payment', {
+      const res = await apiRequest('/subscription/payment', {
         method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
         body: formData,
       });
 
-      const res = await response.json();
-
-      if (!response.ok || !res.success) {
+      if (!res.success) {
         throw new Error(res.message || 'Payment submission failed.');
       }
 

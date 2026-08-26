@@ -11,7 +11,9 @@ import {
  */
 export const getInvoices = async (req, res) => {
   try {
-    const { search, status, classId, period, startDate, endDate } = req.query;
+    const { search, status, classId, period, startDate, endDate, from, to } = req.query;
+    const effectiveStart = startDate || from;
+    const effectiveEnd = endDate || to;
 
     const where = {
       instituteId: req.instituteId,
@@ -24,7 +26,7 @@ export const getInvoices = async (req, res) => {
 
     // Date range filter
     if (period && period !== 'all_time') {
-      const { startDate: rStart, endDate: rEnd } = getDateRange(period, startDate, endDate);
+      const { startDate: rStart, endDate: rEnd } = getDateRange(period, effectiveStart, effectiveEnd);
       const dateFilter = {};
       if (rStart) dateFilter.gte = rStart;
       if (rEnd) dateFilter.lte = rEnd;
@@ -215,13 +217,13 @@ export const createInvoice = async (req, res) => {
  */
 export const getAnalytics = async (req, res) => {
   try {
-    const { period, startDate, endDate, classId } = req.query;
+    const { period, startDate, endDate, from, to, classId } = req.query;
 
     const analytics = await getInvoiceAnalytics({
       instituteId: req.instituteId,
       period,
-      startDate,
-      endDate,
+      startDate: startDate || from,
+      endDate: endDate || to,
       classId,
     });
 
@@ -230,7 +232,8 @@ export const getAnalytics = async (req, res) => {
       data: analytics,
     });
   } catch (error) {
-    return res.status(500).json({ success: false, message: error.message });
+    const status = error.statusCode || (error.message?.includes('Start date') ? 400 : 500);
+    return res.status(status).json({ success: false, message: error.message });
   }
 };
 

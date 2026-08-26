@@ -23,19 +23,37 @@ async function runStep3Tests() {
   const superAdminToken = saData.token;
   console.log('  ✅ Passed: SUPER_ADMIN authenticated successfully.');
 
-  // 2. Institute A Admin Login
-  console.log('Test 2: Institute A Admin Login...');
+  // 2. Provision & Login Test Institute Admin
+  console.log('Test 2: Provision & Authenticate Test Institute Admin...');
+  const rand = Math.floor(1000 + Math.random() * 9000);
+  const provRes = await fetch(`${BASE_URL}/super-admin/institutes`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${superAdminToken}` },
+    body: JSON.stringify({
+      name: `Step3 Institute ${rand}`,
+      code: `S3_${rand}`,
+      email: `contact_s3_${rand}@edu.com`,
+      adminEmail: `admin_s3_${rand}@edu.com`,
+      adminPassword: 'Password123!',
+      adminUsername: `admin_s3_${rand}`,
+    }),
+  });
+  const provData = await provRes.json();
+  if (!provData.success) {
+    throw new Error(`Provisioning failed: ${JSON.stringify(provData)}`);
+  }
+  const instituteAId = provData.data.id;
+
   const iaRes = await fetch(`${BASE_URL}/auth/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email: 'admin@edunexa.com', password: 'Admin123!' }),
+    body: JSON.stringify({ email: `admin_s3_${rand}@edu.com`, password: 'Password123!' }),
   });
   const iaData = await iaRes.json();
   if (!iaData.success || !iaData.token) {
     throw new Error(`Institute Admin login failed: ${JSON.stringify(iaData)}`);
   }
   const instituteAdminToken = iaData.token;
-  const instituteAId = iaData.user.instituteId;
   console.log(`  ✅ Passed: Institute Admin authenticated (Institute ID: ${instituteAId}).`);
 
   // 3. Super Admin Creates Platform Bank Account
