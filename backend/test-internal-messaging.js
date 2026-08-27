@@ -474,6 +474,7 @@ async function runMessagingTestSuite() {
   // Test 35: Attachment stream authorization for participant
   const attRecord = await prisma.messageAttachment.findFirst({
     where: { originalName: 'Term_Timetable.pdf' },
+    orderBy: { id: 'desc' },
   });
   assert(Boolean(attRecord), 'Attachment metadata record exists in database.');
 

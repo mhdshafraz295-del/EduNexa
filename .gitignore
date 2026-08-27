@@ -20,6 +20,8 @@ lerna-debug.log*
 # EduNexa sensitive/runtime files
 backend/backups/
 backend/uploads/
+uploads/
+*.sql
 
 # Editor / OS
 .vscode/*

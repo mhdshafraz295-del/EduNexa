@@ -1,6 +1,7 @@
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
+import { copyR2Object, deleteFromR2 } from '../services/storage/r2Storage.service.js';
 
 // 1. Ensure upload directories exist
 const receiptUploadDir = path.join(process.cwd(), 'uploads', 'receipts');
@@ -377,18 +378,43 @@ export function validateCmsImageMagicBytes(filePath) {
 }
 
 /**
- * Promotes a draft CMS asset to public storage upon successful publish
+ * Promotes a draft CMS asset to public storage upon successful publish.
+ * Supports both R2 storage (r2://platform-cms/draft/...) and local volume disk.
  */
-export function promoteDraftCmsAsset(draftUrlOrPath) {
+export async function promoteDraftCmsAsset(draftUrlOrPath) {
   if (!draftUrlOrPath || typeof draftUrlOrPath !== 'string') return draftUrlOrPath;
 
-  // If already in public storage, keep as is
   const cleanUrl = draftUrlOrPath.split('?')[0].split('#')[0];
+
+  // If already in public storage (R2 or local), keep as is
+  if (cleanUrl.startsWith('r2://platform-cms/public/')) {
+    return cleanUrl;
+  }
   if (cleanUrl.startsWith('/uploads/platform-cms/public/')) {
     return cleanUrl;
   }
 
-  // If pointing to draft endpoint or draft folder
+  // R2 Draft object promotion: r2://platform-cms/draft/<filename>
+  if (cleanUrl.startsWith('r2://')) {
+    const sourceKey = cleanUrl.slice(5); // e.g. platform-cms/draft/cms_123.png or platform-cms/draft/team/cms_123.png
+    if (sourceKey.startsWith('platform-cms/draft/')) {
+      const isTeam = sourceKey.startsWith('platform-cms/draft/team/');
+      const filename = path.basename(sourceKey);
+      const destKey = isTeam
+        ? `platform-cms/public/team/${filename}`
+        : `platform-cms/public/${filename}`;
+
+      try {
+        await copyR2Object(sourceKey, destKey);
+        return `r2://${destKey}`;
+      } catch (err) {
+        console.error('[R2 Promotion Error] Failed to copy object in R2:', err.message);
+        // Fallback check: if file exists on disk volume, attempt local promotion
+      }
+    }
+  }
+
+  // Local volume disk promotion fallback
   const filename = path.basename(cleanUrl);
   const draftFilePath = path.join(PROTECTED_CMS_DRAFT_DIR, filename);
 
@@ -413,22 +439,28 @@ export function promoteDraftCmsAsset(draftUrlOrPath) {
 /**
  * Cleans up old published assets that are no longer referenced in the newly published version.
  * Ensures that live assets are never deleted before publish confirmation.
+ * Supports R2 delete and local disk file deletion.
  */
-export function cleanupUnreferencedPublishedAssets(oldAssetUrls = [], currentReferencedUrls = []) {
+export async function cleanupUnreferencedPublishedAssets(oldAssetUrls = [], currentReferencedUrls = []) {
   const referencedSet = new Set(currentReferencedUrls.filter(Boolean));
-  oldAssetUrls.filter(Boolean).forEach((oldUrl) => {
-    if (!referencedSet.has(oldUrl) && oldUrl.startsWith('/uploads/platform-cms/public/')) {
-      const filename = path.basename(oldUrl);
-      const filePath = path.join(PUBLIC_CMS_DIR, filename);
-      if (fs.existsSync(filePath)) {
-        try {
-          fs.unlinkSync(filePath);
-        } catch (e) {
-          console.warn('Failed to clean up old published asset:', filePath, e.message);
+  for (const oldUrl of oldAssetUrls.filter(Boolean)) {
+    if (!referencedSet.has(oldUrl)) {
+      if (oldUrl.startsWith('r2://platform-cms/public/')) {
+        const key = oldUrl.slice(5);
+        await deleteFromR2(key);
+      } else if (oldUrl.startsWith('/uploads/platform-cms/public/')) {
+        const filename = path.basename(oldUrl);
+        const filePath = path.join(PUBLIC_CMS_DIR, filename);
+        if (fs.existsSync(filePath)) {
+          try {
+            fs.unlinkSync(filePath);
+          } catch (e) {
+            console.warn('Failed to clean up old published asset:', filePath, e.message);
+          }
         }
       }
     }
-  });
+  }
 }
 
 // -------------------------------------------------------------

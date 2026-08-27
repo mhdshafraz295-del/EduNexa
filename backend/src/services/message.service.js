@@ -2,7 +2,8 @@ import fs from 'fs';
 import path from 'path';
 import prisma from '../config/prisma.js';
 import { validateUserCanMessage, getAllowedRecipients, formatRecipientInfo } from './messageRelationship.service.js';
-import { validateMessageAttachmentMagicBytes } from '../middleware/upload.middleware.js';
+import { validateMessageAttachmentMagicBytes, PROTECTED_MESSAGE_DIR } from '../middleware/upload.middleware.js';
+import { processStorageUpload } from './storage/storageResolver.js';
 
 /**
  * Creates or reuses a direct conversation and appends the initial message.
@@ -40,7 +41,8 @@ export async function createConversation(instituteId, senderUser, { recipientId,
     throw error;
   }
 
-  // Validate magic bytes if attachment provided
+  let uploadResult = null;
+  // Validate magic bytes & upload if attachment provided
   if (file) {
     const isValidMagic = validateMessageAttachmentMagicBytes(file.path);
     if (!isValidMagic) {
@@ -49,6 +51,19 @@ export async function createConversation(instituteId, senderUser, { recipientId,
       error.status = 400;
       throw error;
     }
+
+    const ext = path.extname(file.originalname).toLowerCase();
+    const uniqueFilename = `msg_${Date.now()}_${Math.round(Math.random() * 1e9)}${ext}`;
+    const r2Key = `institutes/${instituteId}/messages/${uniqueFilename}`;
+
+    uploadResult = await processStorageUpload({
+      filePath: file.path,
+      r2Key,
+      localDir: PROTECTED_MESSAGE_DIR,
+      localFilename: uniqueFilename,
+      mimeType: file.mimetype,
+      moduleName: 'messages',
+    });
   }
 
   try {
@@ -111,10 +126,10 @@ export async function createConversation(instituteId, senderUser, { recipientId,
               instituteId,
               messageId: message.id,
               originalName: file.originalname,
-              storedName: file.filename,
+              storedName: uploadResult ? path.basename(uploadResult.storageRef) : (file.filename || file.originalname),
               mimeType: file.mimetype,
               fileSize: file.size,
-              filePath: file.path,
+              filePath: uploadResult ? uploadResult.storageRef : file.path,
             },
           });
         }
@@ -202,10 +217,10 @@ export async function createConversation(instituteId, senderUser, { recipientId,
             instituteId,
             messageId: message.id,
             originalName: file.originalname,
-            storedName: file.filename,
+            storedName: uploadResult ? path.basename(uploadResult.storageRef) : (file.filename || file.originalname),
             mimeType: file.mimetype,
             fileSize: file.size,
-            filePath: file.path,
+            filePath: uploadResult ? uploadResult.storageRef : file.path,
           },
         });
       }
@@ -296,7 +311,8 @@ export async function sendReply(instituteId, senderUser, conversationId, { body,
     throw error;
   }
 
-  // Validate magic bytes if attachment provided
+  let uploadResult = null;
+  // Validate magic bytes & upload if attachment provided
   if (file) {
     const isValidMagic = validateMessageAttachmentMagicBytes(file.path);
     if (!isValidMagic) {
@@ -305,6 +321,19 @@ export async function sendReply(instituteId, senderUser, conversationId, { body,
       error.status = 400;
       throw error;
     }
+
+    const ext = path.extname(file.originalname).toLowerCase();
+    const uniqueFilename = `msg_${Date.now()}_${Math.round(Math.random() * 1e9)}${ext}`;
+    const r2Key = `institutes/${instituteId}/messages/${uniqueFilename}`;
+
+    uploadResult = await processStorageUpload({
+      filePath: file.path,
+      r2Key,
+      localDir: PROTECTED_MESSAGE_DIR,
+      localFilename: uniqueFilename,
+      mimeType: file.mimetype,
+      moduleName: 'messages',
+    });
   }
 
   const now = new Date();
@@ -358,10 +387,10 @@ export async function sendReply(instituteId, senderUser, conversationId, { body,
             instituteId,
             messageId: message.id,
             originalName: file.originalname,
-            storedName: file.filename,
+            storedName: uploadResult ? path.basename(uploadResult.storageRef) : (file.filename || file.originalname),
             mimeType: file.mimetype,
             fileSize: file.size,
-            filePath: file.path,
+            filePath: uploadResult ? uploadResult.storageRef : file.path,
           },
         });
       }
@@ -955,14 +984,30 @@ export async function getAttachmentStream(instituteId, userId, attachmentId) {
     throw error;
   }
 
-  if (!fs.existsSync(attachment.filePath)) {
-    const error = new Error('Attachment file missing on server storage.');
-    error.status = 404;
-    throw error;
+  let storageRef = attachment.filePath;
+  if (!storageRef.startsWith('r2://')) {
+    const cleanPath = storageRef.startsWith('/') ? storageRef.slice(1) : storageRef;
+    const safePath = path.resolve(PROTECTED_MESSAGE_DIR, path.basename(storageRef));
+    const candidate1 = path.resolve(process.cwd(), cleanPath);
+    const candidate2 = path.resolve(process.cwd(), 'backend', cleanPath);
+
+    if (fs.existsSync(safePath)) {
+      storageRef = safePath;
+    } else if (fs.existsSync(candidate1)) {
+      storageRef = candidate1;
+    } else if (fs.existsSync(candidate2)) {
+      storageRef = candidate2;
+    } else if (fs.existsSync(attachment.filePath)) {
+      storageRef = attachment.filePath;
+    } else {
+      const error = new Error('Attachment file missing on server storage.');
+      error.status = 404;
+      throw error;
+    }
   }
 
   return {
-    filePath: attachment.filePath,
+    filePath: storageRef,
     originalName: attachment.originalName,
     mimeType: attachment.mimeType,
     fileSize: attachment.fileSize,

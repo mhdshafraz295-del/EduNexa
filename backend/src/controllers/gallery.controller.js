@@ -22,6 +22,11 @@ import {
   PROTECTED_GALLERY_DIR,
   validateMediaMagicBytes,
 } from '../middleware/upload.middleware.js';
+import {
+  processStorageUpload,
+  getStorageResource,
+  deleteStorageResource,
+} from '../services/storage/storageResolver.js';
 
 // =========================================================================
 // 1. ALBUMS ENDPOINTS
@@ -268,12 +273,25 @@ export const uploadMedia = async (req, res) => {
         });
       }
 
+      const ext = path.extname(file.originalname).toLowerCase();
+      const uniqueFilename = `gallery_${Date.now()}_${Math.round(Math.random() * 1e9)}${ext}`;
+      const r2Key = `institutes/${instituteId}/gallery/${uniqueFilename}`;
+
+      const uploadResult = await processStorageUpload({
+        filePath: file.path,
+        r2Key,
+        localDir: PROTECTED_GALLERY_DIR,
+        localFilename: uniqueFilename,
+        mimeType: file.mimetype,
+        moduleName: 'gallery',
+      });
+
       itemsToCreate.push({
         type: isVideo ? 'VIDEO_UPLOAD' : 'IMAGE',
         title: title || file.originalname,
         caption,
-        filePath: file.filename,
-        thumbnailPath: isVideo ? null : file.filename,
+        filePath: uploadResult.storageRef,
+        thumbnailPath: isVideo ? null : uploadResult.storageRef,
         mimeType: file.mimetype,
         fileSize: file.size,
         isPublished,
@@ -619,72 +637,34 @@ export const streamMedia = async (req, res) => {
       }
     }
 
-    // Step 2.5: Resolve physical file path on disk with strict directory traversal prevention
-    const safeFilename = path.basename(media.filePath);
-    const resolvedProtectedDir = path.resolve(PROTECTED_GALLERY_DIR);
-    const fullPath = path.resolve(resolvedProtectedDir, safeFilename);
+    // Step 2.5: Resolve physical file resource (R2 or local volume) via unified resolver
+    // Legacy fallback support for raw filename strings stored prior to Phase 2
+    let storageRef = media.filePath;
+    if (!storageRef.startsWith('r2://') && !storageRef.startsWith('/')) {
+      const safeFilename = path.basename(storageRef);
+      storageRef = path.join(PROTECTED_GALLERY_DIR, safeFilename);
+    }
 
-    if (!fullPath.startsWith(resolvedProtectedDir) || !fs.existsSync(fullPath)) {
+    const resource = await getStorageResource(storageRef, { range: req.headers.range });
+
+    if (!resource || !resource.stream) {
       return res.status(404).json({ success: false, message: 'Media file missing on storage server.' });
     }
 
-    const stat = fs.statSync(fullPath);
-    const fileSize = stat.size;
-    const range = req.headers.range;
-    const mimeType = media.mimeType || 'application/octet-stream';
+    const headers = {
+      'Content-Type': media.mimeType || resource.contentType || 'application/octet-stream',
+      'Accept-Ranges': 'bytes',
+    };
 
-    // Step 2.6: HTTP Range Processing & 416 Handling
-    if (range) {
-      // Check for unsupported multi-range (e.g. bytes=0-10,20-30)
-      if (range.includes(',')) {
-        res.setHeader('Content-Range', `bytes */${fileSize}`);
-        return res.status(416).json({ success: false, message: 'Multiple range requests are not supported.' });
-      }
-
-      const match = range.match(/bytes=(\d*)-(\d*)/);
-      if (!match) {
-        res.setHeader('Content-Range', `bytes */${fileSize}`);
-        return res.status(416).json({ success: false, message: 'Invalid Range header format.' });
-      }
-
-      let start = match[1] ? parseInt(match[1], 10) : 0;
-      let end = match[2] ? parseInt(match[2], 10) : fileSize - 1;
-
-      // Handle suffix range (e.g. bytes=-500)
-      if (!match[1] && match[2]) {
-        const suffixLength = parseInt(match[2], 10);
-        start = Math.max(0, fileSize - suffixLength);
-        end = fileSize - 1;
-      }
-
-      // Validate bounds: start >= fileSize OR end >= fileSize OR start > end OR start < 0
-      if (isNaN(start) || isNaN(end) || start >= fileSize || end >= fileSize || start > end || start < 0) {
-        res.setHeader('Content-Range', `bytes */${fileSize}`);
-        return res.status(416).json({ success: false, message: 'Requested range not satisfiable.' });
-      }
-
-      const chunksize = end - start + 1;
-      const fileStream = fs.createReadStream(fullPath, { start, end });
-
-      res.writeHead(206, {
-        'Content-Range': `bytes ${start}-${end}/${fileSize}`,
-        'Accept-Ranges': 'bytes',
-        'Content-Length': chunksize,
-        'Content-Type': mimeType,
-      });
-
-      fileStream.pipe(res);
-    } else {
-      // Full file delivery (e.g. for authenticated Blob image downloads)
-      res.writeHead(200, {
-        'Content-Length': fileSize,
-        'Content-Type': mimeType,
-        'Accept-Ranges': 'bytes',
-      });
-
-      const fileStream = fs.createReadStream(fullPath);
-      fileStream.pipe(res);
+    if (resource.contentLength) {
+      headers['Content-Length'] = resource.contentLength;
     }
+    if (resource.contentRange) {
+      headers['Content-Range'] = resource.contentRange;
+    }
+
+    res.writeHead(resource.statusCode || 200, headers);
+    resource.stream.pipe(res);
   } catch (error) {
     console.error('Error streaming gallery media:', error);
     if (!res.headersSent) {

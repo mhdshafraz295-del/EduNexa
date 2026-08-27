@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { apiRequest } from '../../../services/api';
 import PageHeader from '../../../components/common/PageHeader';
 import GlassCard from '../../../components/common/GlassCard';
-import PlatformAboutViewer, { ICON_MAP, resolveCmsAssetUrl, LinkedInIcon } from '../../../components/cms/PlatformAboutViewer';
+import PlatformAboutViewer, { ICON_MAP, resolveCmsAssetUrl, CmsImage, LinkedInIcon } from '../../../components/cms/PlatformAboutViewer';
 import {
   Sparkles,
   Save,
@@ -743,8 +743,8 @@ export default function PlatformCmsPage() {
                   {formData.heroImage ? (
                     <div className="space-y-3">
                       <div className="rounded-xl overflow-hidden max-h-48 border border-slate-200 shadow-xs">
-                        <img
-                          src={resolveCmsAssetUrl(formData.heroImage)}
+                        <CmsImage
+                          src={formData.heroImage}
                           alt="Hero Preview"
                           className="w-full h-full object-cover"
                         />
@@ -902,8 +902,8 @@ export default function PlatformCmsPage() {
                   {formData.storyImage ? (
                     <div className="space-y-3">
                       <div className="rounded-xl overflow-hidden max-h-48 border border-slate-200 shadow-xs">
-                        <img
-                          src={resolveCmsAssetUrl(formData.storyImage)}
+                        <CmsImage
+                          src={formData.storyImage}
                           alt="Story Preview"
                           className="w-full h-full object-cover"
                         />
@@ -1115,14 +1115,11 @@ export default function PlatformCmsPage() {
                                 .join('')
                                 .toUpperCase() || 'TM'}
                             </span>
-                            {resolvedImgUrl && (
-                              <img
-                                src={resolvedImgUrl}
+                            {member.profileImage && (
+                              <CmsImage
+                                src={member.profileImage}
                                 alt={member.fullName}
                                 className="absolute inset-0 w-full h-full object-cover"
-                                onError={(e) => {
-                                  e.currentTarget.style.display = 'none';
-                                }}
                               />
                             )}
                           </div>
@@ -1455,13 +1452,10 @@ export default function PlatformCmsPage() {
                 <div className="w-16 h-16 rounded-2xl overflow-hidden bg-slate-100 border border-slate-200 flex items-center justify-center shrink-0 shadow-2xs relative text-slate-400">
                   <ImageIcon className="w-6 h-6" />
                   {teamMemberForm.profileImage && (
-                    <img
-                      src={resolveCmsAssetUrl(teamMemberForm.profileImage)}
+                    <CmsImage
+                      src={teamMemberForm.profileImage}
                       alt="Profile preview"
                       className="absolute inset-0 w-full h-full object-cover"
-                      onError={(e) => {
-                        e.currentTarget.style.display = 'none';
-                      }}
                     />
                   )}
                 </div>

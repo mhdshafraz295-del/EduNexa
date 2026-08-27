@@ -3,6 +3,7 @@ import fs from 'fs';
 import prisma from '../config/prisma.js';
 import { z } from 'zod';
 import { getInstituteEntitlement, getInstituteUsageStats } from '../services/entitlement.service.js';
+import { processStorageUpload, getStorageResource } from '../services/storage/storageResolver.js';
 
 // GET /api/subscription/entitlement - Real-time feature permissions and status
 export const getEntitlement = async (req, res, next) => {
@@ -312,6 +313,20 @@ export const submitPayment = async (req, res, next) => {
       });
     }
 
+    // Process storage upload via R2-first with Railway volume fallback
+    const ext = path.extname(req.file.originalname).toLowerCase();
+    const uniqueFilename = `sub_receipt_${Date.now()}_${Math.round(Math.random() * 1e9)}${ext}`;
+    const r2Key = `institutes/${instituteId}/subscriptions/receipts/${uniqueFilename}`;
+
+    const uploadResult = await processStorageUpload({
+      filePath: req.file.path,
+      r2Key,
+      localDir: path.join(process.cwd(), 'uploads', 'receipts'),
+      localFilename: uniqueFilename,
+      mimeType: req.file.mimetype,
+      moduleName: 'subscriptions',
+    });
+
     // Create Subscription Payment & update Subscription state in a transaction
     const transferDate = transferDateStr ? new Date(transferDateStr) : new Date();
 
@@ -326,7 +341,7 @@ export const submitPayment = async (req, res, next) => {
             currency: subscription.currencySnapshot,
             transferReference,
             transferDate,
-            receiptFile: req.file.filename,
+            receiptFile: uploadResult.storageRef,
             receiptMimeType: req.file.mimetype,
             receiptOriginalName: req.file.originalname,
             status: 'PENDING',
@@ -389,19 +404,23 @@ export const getReceiptFile = async (req, res, next) => {
       });
     }
 
-    const filePath = path.join(process.cwd(), 'uploads', 'receipts', payment.receiptFile);
-
-    if (!fs.existsSync(filePath)) {
-      return res.status(404).json({ success: false, message: 'Receipt file not found on disk.' });
+    let storageRef = payment.receiptFile;
+    if (!storageRef.startsWith('r2://') && !storageRef.startsWith('/')) {
+      storageRef = path.join(process.cwd(), 'uploads', 'receipts', payment.receiptFile);
     }
 
-    if (payment.receiptMimeType) {
-      res.setHeader('Content-Type', payment.receiptMimeType);
+    const resource = await getStorageResource(storageRef);
+    if (!resource || !resource.stream) {
+      return res.status(404).json({ success: false, message: 'Receipt file not found on storage server.' });
     }
-    res.setHeader('Content-Disposition', `inline; filename="${payment.receiptOriginalName || payment.receiptFile}"`);
 
-    const fileStream = fs.createReadStream(filePath);
-    fileStream.pipe(res);
+    res.setHeader('Content-Type', payment.receiptMimeType || resource.contentType || 'image/jpeg');
+    res.setHeader('Content-Disposition', `inline; filename="${payment.receiptOriginalName || 'receipt'}"`);
+    if (resource.contentLength) {
+      res.setHeader('Content-Length', resource.contentLength);
+    }
+
+    resource.stream.pipe(res);
   } catch (error) {
     next(error);
   }

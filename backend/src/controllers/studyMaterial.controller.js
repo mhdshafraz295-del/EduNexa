@@ -1,5 +1,5 @@
-import fs from 'fs';
 import * as studyMaterialService from '../services/studyMaterial.service.js';
+import { getStorageResource } from '../services/storage/storageResolver.js';
 
 /**
  * Controller: List Study Materials (Admin)
@@ -283,8 +283,13 @@ export async function streamMaterialPdf(req, res) {
       req.params.id
     );
 
-    if (!result || !result.filePath || !fs.existsSync(result.filePath)) {
+    if (!result || !result.filePath) {
       return res.status(404).json({ success: false, message: 'Study material file missing.' });
+    }
+
+    const resource = await getStorageResource(result.filePath);
+    if (!resource || !resource.stream) {
+      return res.status(404).json({ success: false, message: 'Study material file could not be found on storage.' });
     }
 
     const rawName = result.fileName.replace(/[^a-zA-Z0-9_.-]/g, '_');
@@ -293,21 +298,13 @@ export async function streamMaterialPdf(req, res) {
       ? `attachment; filename="${rawName}"; filename*=UTF-8''${safeEncodedName}`
       : `inline; filename="${rawName}"; filename*=UTF-8''${safeEncodedName}`;
 
-    res.setHeader('Content-Type', result.mimeType || 'application/pdf');
+    res.setHeader('Content-Type', result.mimeType || resource.contentType || 'application/pdf');
     res.setHeader('Content-Disposition', disposition);
-    if (result.fileSize) {
-      res.setHeader('Content-Length', result.fileSize);
+    if (resource.contentLength) {
+      res.setHeader('Content-Length', resource.contentLength);
     }
 
-    const stream = fs.createReadStream(result.filePath);
-    stream.on('error', (err) => {
-      console.error('PDF stream error:', err);
-      if (!res.headersSent) {
-        res.status(500).json({ success: false, message: 'Failed to stream PDF file.' });
-      }
-    });
-
-    stream.pipe(res);
+    resource.stream.pipe(res);
   } catch (error) {
     const statusCode = error.message?.includes('not found') || error.message?.includes('could not be found') ? 404 : 403;
     res.status(statusCode).json({ success: false, message: error.message });
@@ -325,22 +322,23 @@ export async function streamProtectedReceipt(req, res) {
       req.params.id
     );
 
-    const safeFilename = encodeURIComponent(result.fileName.replace(/[^a-zA-Z0-9_.-]/g, '_'));
-    res.setHeader('Content-Type', result.mimeType || 'image/jpeg');
-    res.setHeader('Content-Disposition', `inline; filename="${safeFilename}"`);
-    if (result.fileSize) {
-      res.setHeader('Content-Length', result.fileSize);
+    if (!result || !result.filePath) {
+      return res.status(404).json({ success: false, message: 'Receipt file missing.' });
     }
 
-    const stream = fs.createReadStream(result.filePath);
-    stream.on('error', (err) => {
-      console.error('Receipt stream error:', err);
-      if (!res.headersSent) {
-        res.status(500).json({ success: false, message: 'Failed to stream receipt file.' });
-      }
-    });
+    const resource = await getStorageResource(result.filePath);
+    if (!resource || !resource.stream) {
+      return res.status(404).json({ success: false, message: 'Receipt file could not be found on storage.' });
+    }
 
-    stream.pipe(res);
+    const safeFilename = encodeURIComponent(result.fileName.replace(/[^a-zA-Z0-9_.-]/g, '_'));
+    res.setHeader('Content-Type', result.mimeType || resource.contentType || 'image/jpeg');
+    res.setHeader('Content-Disposition', `inline; filename="${safeFilename}"`);
+    if (resource.contentLength) {
+      res.setHeader('Content-Length', resource.contentLength);
+    }
+
+    resource.stream.pipe(res);
   } catch (error) {
     res.status(403).json({ success: false, message: error.message });
   }

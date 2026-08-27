@@ -7,6 +7,10 @@ import {
   validatePdfMagicBytes,
   validateReceiptMagicBytes,
 } from '../middleware/upload.middleware.js';
+import {
+  processStorageUpload,
+  deleteStorageResource,
+} from './storage/storageResolver.js';
 
 /**
  * Safely resolves and validates that a target file path resides inside the designated base directory.
@@ -14,8 +18,11 @@ import {
  */
 export function resolveSafePath(baseDir, filePath) {
   if (!filePath || typeof filePath !== 'string') return null;
+  if (filePath.includes('..')) return null;
   const normalizedBase = path.resolve(baseDir);
-  const resolved = path.resolve(filePath);
+  const safeFilename = path.basename(filePath);
+  const targetPath = path.join(normalizedBase, safeFilename);
+  const resolved = path.resolve(targetPath);
   if (!resolved.startsWith(normalizedBase)) {
     return null;
   }
@@ -348,6 +355,19 @@ export async function createStudyMaterial(instituteId, userId, data, file) {
     }
   }
 
+  const ext = path.extname(file.originalname).toLowerCase() || '.pdf';
+  const uniqueFilename = `study_material_${Date.now()}_${Math.round(Math.random() * 1e9)}${ext}`;
+  const r2Key = `institutes/${instituteId}/study-materials/${uniqueFilename}`;
+
+  const uploadResult = await processStorageUpload({
+    filePath: file.path,
+    r2Key,
+    localDir: PROTECTED_STUDY_MATERIAL_DIR,
+    localFilename: uniqueFilename,
+    mimeType: file.mimetype || 'application/pdf',
+    moduleName: 'study-materials',
+  });
+
   const publishedAt = targetStatus === 'PUBLISHED' ? new Date() : null;
 
   const newMaterial = await prisma.studyMaterial.create({
@@ -361,7 +381,7 @@ export async function createStudyMaterial(instituteId, userId, data, file) {
       accessType: isPaid ? 'PAID' : 'FREE',
       price: isPaid ? numericPrice : null,
       currency: currency ? currency.trim().toUpperCase() : 'LKR',
-      pdfFilePath: file.path,
+      pdfFilePath: uploadResult.storageRef,
       originalFileName: file.originalname,
       mimeType: file.mimetype || 'application/pdf',
       fileSize: file.size,
@@ -1454,13 +1474,14 @@ export async function getStudyMaterialPdfStream(instituteId, user, materialId) {
       }
     }
 
-    const safePath = resolveSafePath(PROTECTED_STUDY_MATERIAL_DIR, material.pdfFilePath);
-    if (!safePath || !fs.existsSync(safePath)) {
-      throw new Error('Study material PDF file could not be found on storage.');
+    let storageRef = material.pdfFilePath;
+    if (!storageRef.startsWith('r2://')) {
+      const safePath = resolveSafePath(PROTECTED_STUDY_MATERIAL_DIR, path.basename(material.pdfFilePath));
+      if (safePath && fs.existsSync(safePath)) storageRef = safePath;
     }
 
     return {
-      filePath: safePath,
+      filePath: storageRef,
       fileName: material.originalFileName || `material_${material.id}.pdf`,
       fileSize: material.fileSize,
       mimeType: material.mimeType || 'application/pdf',
@@ -1499,13 +1520,14 @@ export async function getPurchaseReceiptStream(instituteId, user, purchaseId) {
     throw new Error('Access denied. You do not have permission to view this receipt.');
   }
 
-  const safePath = resolveSafePath(PROTECTED_NOTE_RECEIPT_DIR, purchase.receiptFilePath);
-  if (!safePath || !fs.existsSync(safePath)) {
-    throw new Error('Receipt file could not be found on storage.');
+  let storageRef = purchase.receiptFilePath;
+  if (!storageRef.startsWith('r2://')) {
+    const safePath = resolveSafePath(PROTECTED_NOTE_RECEIPT_DIR, path.basename(purchase.receiptFilePath));
+    if (safePath && fs.existsSync(safePath)) storageRef = safePath;
   }
 
   return {
-    filePath: safePath,
+    filePath: storageRef,
     fileName: purchase.receiptOriginalName || `receipt_${purchase.id}`,
     fileSize: purchase.receiptFileSize,
     mimeType: purchase.receiptMimeType || 'image/jpeg',

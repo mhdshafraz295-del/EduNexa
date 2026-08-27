@@ -156,14 +156,26 @@ export const streamAttachment = async (req, res, next) => {
 
     const fileInfo = await messageService.getAttachmentStream(req.instituteId, req.user.id, id);
 
+    let storageRef = fileInfo.filePath;
+    if (!storageRef.startsWith('r2://') && !storageRef.startsWith('/')) {
+      storageRef = path.join(process.cwd(), 'uploads', 'messages', 'protected', fileInfo.filePath);
+    }
+
+    const resource = await getStorageResource(storageRef);
+    if (!resource || !resource.stream) {
+      return res.status(404).json({ success: false, message: 'Attachment file missing on storage server.' });
+    }
+
     const safeFilename = fileInfo.originalName.replace(/[^a-zA-Z0-9._-]/g, '_');
     const dispositionType = download === '1' || download === 'true' ? 'attachment' : 'inline';
 
-    res.setHeader('Content-Type', fileInfo.mimeType);
-    res.setHeader('Content-Length', fileInfo.fileSize);
+    res.setHeader('Content-Type', fileInfo.mimeType || resource.contentType || 'application/octet-stream');
+    if (resource.contentLength) {
+      res.setHeader('Content-Length', resource.contentLength);
+    }
     res.setHeader('Content-Disposition', `${dispositionType}; filename="${safeFilename}"`);
 
-    res.sendFile(path.resolve(fileInfo.filePath));
+    resource.stream.pipe(res);
   } catch (error) {
     next(error);
   }

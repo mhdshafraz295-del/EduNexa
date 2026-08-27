@@ -5,6 +5,7 @@ import {
   validateCmsImageMagicBytes,
   PROTECTED_CMS_DRAFT_DIR,
 } from '../middleware/upload.middleware.js';
+import { isR2Configured, uploadToR2 } from './storage/r2Storage.service.js';
 import path from 'path';
 import fs from 'fs';
 
@@ -500,15 +501,17 @@ export async function publishAdminCms(user, publishPayload = {}) {
   // Validate all URLs before publishing
   validateCmsUrls(draft);
 
-  // Promote referenced draft images to public storage
-  const promotedHeroImage = draft.heroImage ? promoteDraftCmsAsset(draft.heroImage) : null;
-  const promotedStoryImage = draft.storyImage ? promoteDraftCmsAsset(draft.storyImage) : null;
+  // Promote referenced draft images to public storage (supports R2 copy & local disk fallback)
+  const promotedHeroImage = draft.heroImage ? await promoteDraftCmsAsset(draft.heroImage) : null;
+  const promotedStoryImage = draft.storyImage ? await promoteDraftCmsAsset(draft.storyImage) : null;
 
   // Promote team member profile images
-  const promotedTeamMembers = (draft.teamMembers || []).map((m) => ({
-    ...m,
-    promotedProfileImage: m.profileImage ? promoteDraftCmsAsset(m.profileImage) : null,
-  }));
+  const promotedTeamMembers = await Promise.all(
+    (draft.teamMembers || []).map(async (m) => ({
+      ...m,
+      promotedProfileImage: m.profileImage ? await promoteDraftCmsAsset(m.profileImage) : null,
+    }))
+  );
 
   // Identify existing live published record and its assets for safe cleanup
   const existingPublished = await prisma.platformCmsContent.findFirst({
@@ -685,13 +688,14 @@ export async function publishAdminCms(user, publishPayload = {}) {
   });
 
   // Safely cleanup old published assets AFTER transaction successfully commits
-  cleanupUnreferencedPublishedAssets(oldPublishedAssets, newPublishedAssets);
+  await cleanupUnreferencedPublishedAssets(oldPublishedAssets, newPublishedAssets);
 
   return getPublishedCms();
 }
 
 /**
- * Handles uploaded draft image, verifies magic bytes, and records audit log.
+ * Handles uploaded draft image, verifies magic bytes, uploads to Cloudflare R2 if configured
+ * (with fallback to local volume disk), and records audit log.
  */
 export async function handleDraftImageUpload(user, file, field = 'hero') {
   if (!file) {
@@ -717,20 +721,51 @@ export async function handleDraftImageUpload(user, file, field = 'hero') {
   }
 
   const filename = path.basename(filePath);
-  const draftAssetUrl = `/api/platform-cms/admin/draft-asset/${filename}`;
+  let draftUrl = `/api/platform-cms/admin/draft-asset/${filename}`;
+
+  // Attempt Cloudflare R2 upload if configured
+  if (isR2Configured()) {
+    try {
+      const fileBuffer = fs.readFileSync(filePath);
+      const ext = path.extname(filename).toLowerCase() || '.jpg';
+      const cleanField = String(field).toLowerCase().includes('team') ? 'team' : 'cms';
+
+      const r2Key = cleanField === 'team'
+        ? `platform-cms/draft/team/cms_${Date.now()}_${Math.round(Math.random() * 1e9)}${ext}`
+        : `platform-cms/draft/cms_${Date.now()}_${Math.round(Math.random() * 1e9)}${ext}`;
+
+      await uploadToR2({
+        buffer: fileBuffer,
+        key: r2Key,
+        contentType: file.mimetype || 'image/jpeg',
+      });
+
+      draftUrl = `r2://${r2Key}`;
+
+      // Remove temporary disk upload after successful R2 upload
+      try {
+        fs.unlinkSync(filePath);
+      } catch {
+        // ignore
+      }
+    } catch (r2Err) {
+      console.error('[R2 Storage Warning] Failed to upload draft image to R2, falling back to volume disk:', r2Err.message);
+      draftUrl = `/api/platform-cms/admin/draft-asset/${filename}`;
+    }
+  }
 
   // Log image audit
   await prisma.platformCmsAuditLog.create({
     data: {
       action: 'PLATFORM_CMS_IMAGE_CHANGED',
       performedById: user.id,
-      details: JSON.stringify({ field, filename, size: file.size, mimetype: file.mimetype }),
+      details: JSON.stringify({ field, filename, draftUrl, size: file.size, mimetype: file.mimetype }),
     },
   });
 
   return {
     success: true,
-    draftUrl: draftAssetUrl,
+    draftUrl,
     filename,
     field,
   };

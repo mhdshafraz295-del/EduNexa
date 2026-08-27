@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import * as broadcastService from '../services/broadcast.service.js';
+import { getStorageResource } from '../services/storage/storageResolver.js';
 
 export const previewAudience = async (req, res) => {
   try {
@@ -180,15 +181,26 @@ export const downloadBroadcastAttachment = async (req, res) => {
       attachmentId
     );
 
+    let storageRef = streamInfo.filePath;
+    if (!storageRef.startsWith('r2://') && !storageRef.startsWith('/')) {
+      storageRef = path.join(process.cwd(), 'uploads', 'messages', 'protected', streamInfo.filePath);
+    }
+
+    const resource = await getStorageResource(storageRef);
+    if (!resource || !resource.stream) {
+      return res.status(404).json({ success: false, message: 'Broadcast attachment file missing on storage server.' });
+    }
+
     const isDownload = req.query.download === '1' || req.query.download === 'true';
     const disposition = isDownload ? 'attachment' : 'inline';
 
-    res.setHeader('Content-Type', streamInfo.mimeType);
+    res.setHeader('Content-Type', streamInfo.mimeType || resource.contentType || 'application/octet-stream');
     res.setHeader('Content-Disposition', `${disposition}; filename="${encodeURIComponent(streamInfo.originalName)}"`);
-    res.setHeader('Content-Length', streamInfo.fileSize);
+    if (resource.contentLength) {
+      res.setHeader('Content-Length', resource.contentLength);
+    }
 
-    const fileStream = fs.createReadStream(streamInfo.filePath);
-    fileStream.pipe(res);
+    resource.stream.pipe(res);
   } catch (err) {
     res.status(err.status || 500).json({
       success: false,

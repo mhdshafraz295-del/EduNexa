@@ -58,40 +58,121 @@ export const ICON_MAP = {
 
 /**
  * Safely resolves CMS asset URLs for both public published images and private draft preview images.
- * Attaches auth token to draft asset endpoints and normalizes paths.
+ * Supports R2 object references (r2://platform-cms/...) and legacy volume storage.
+ * Does NOT place session JWT tokens in query parameters.
  */
 export function resolveCmsAssetUrl(assetPath) {
   if (!assetPath || typeof assetPath !== 'string' || assetPath.trim() === '') return '';
   const trimmed = assetPath.trim();
   if (trimmed.startsWith('blob:') || trimmed.startsWith('data:')) return trimmed;
 
-  const [basePath, search] = trimmed.split('?');
-
-  // If it's a protected draft asset endpoint, attach auth token for browser <img> / CSS loading
-  if (basePath.includes('/platform-cms/admin/draft-asset/')) {
-    const token = localStorage.getItem('edunexa_token');
-    const queryParams = new URLSearchParams(search || '');
-    if (token && !queryParams.has('token')) {
-      queryParams.set('token', token);
+  // Handle Cloudflare R2 URIs
+  if (trimmed.startsWith('r2://')) {
+    const key = trimmed.slice(5);
+    if (key.startsWith('platform-cms/draft/')) {
+      return `${API_BASE}/platform-cms/admin/draft-asset/${key}`;
     }
-    const qs = queryParams.toString();
-    const cleanEndpoint = basePath.startsWith('/api') ? basePath.slice(4) : (basePath.startsWith('/') ? basePath : `/${basePath}`);
-    return `${API_BASE}${cleanEndpoint}${qs ? `?${qs}` : ''}`;
+    if (key.startsWith('platform-cms/public/')) {
+      return `${API_BASE}/platform-cms/assets/${key}`;
+    }
+    return `${API_BASE}/platform-cms/assets/${key}`;
   }
 
   if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
     return trimmed;
   }
 
-  // If it's an uploaded backend file (e.g. /uploads/platform-cms/public/...)
+  // Handle protected draft endpoints
+  if (trimmed.includes('/platform-cms/admin/draft-asset/')) {
+    const cleanEndpoint = trimmed.startsWith('/api')
+      ? trimmed.slice(4)
+      : (trimmed.startsWith('/') ? trimmed : `/${trimmed}`);
+    return `${API_BASE}${cleanEndpoint.split('?')[0]}`;
+  }
+
+  // Handle uploaded backend files (e.g. /uploads/platform-cms/public/...)
   if (trimmed.startsWith('/uploads/') || trimmed.startsWith('uploads/')) {
     const backendOrigin = API_BASE.replace(/\/api\/?$/, '');
     const cleanPath = trimmed.startsWith('/') ? trimmed : `/${trimmed}`;
     return `${backendOrigin}${cleanPath}`;
   }
 
-  // Relative path normalization for frontend assets (e.g. /logo.png, /assets/...)
+  // Relative path normalization for frontend static assets
   return trimmed.startsWith('/') ? trimmed : `/${trimmed}`;
+}
+
+/**
+ * Custom React hook that fetches protected draft assets using Authorization: Bearer <token>
+ * headers and generates temporary browser Object URLs (blob:...) for secure rendering without query string token leaks.
+ */
+export function useAuthenticatedAssetUrl(rawSrc) {
+  const [objectUrl, setObjectUrl] = useState('');
+  const resolved = resolveCmsAssetUrl(rawSrc);
+
+  useEffect(() => {
+    if (!resolved) {
+      setObjectUrl('');
+      return;
+    }
+
+    // Direct return for blob, data, or public proxy URLs
+    if (
+      resolved.startsWith('blob:') ||
+      resolved.startsWith('data:') ||
+      !resolved.includes('/platform-cms/admin/draft-asset/')
+    ) {
+      setObjectUrl(resolved);
+      return;
+    }
+
+    let isMounted = true;
+    let createdBlobUrl = null;
+    const token = localStorage.getItem('edunexa_token');
+
+    fetch(resolved, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    })
+      .then((res) => {
+        if (!res.ok) throw new Error(`HTTP ${res.status} fetching protected draft asset`);
+        return res.blob();
+      })
+      .then((blob) => {
+        if (isMounted) {
+          createdBlobUrl = URL.createObjectURL(blob);
+          setObjectUrl(createdBlobUrl);
+        }
+      })
+      .catch((err) => {
+        if (isMounted) setObjectUrl(resolved);
+      });
+
+    return () => {
+      isMounted = false;
+      if (createdBlobUrl) {
+        URL.revokeObjectURL(createdBlobUrl);
+      }
+    };
+  }, [resolved]);
+
+  return objectUrl;
+}
+
+/**
+ * Reusable image component that uses useAuthenticatedAssetUrl for secure draft preview rendering.
+ */
+export function CmsImage({ src, alt = '', className = '', style = {}, onError, ...props }) {
+  const assetUrl = useAuthenticatedAssetUrl(src);
+  if (!assetUrl) return null;
+  return (
+    <img
+      src={assetUrl}
+      alt={alt}
+      className={className}
+      style={style}
+      onError={onError}
+      {...props}
+    />
+  );
 }
 
 export default function PlatformAboutViewer({
@@ -212,8 +293,8 @@ export default function PlatformAboutViewer({
     teamMembers = [],
   } = cmsData;
 
-  const resolvedHeroUrl = resolveCmsAssetUrl(heroImage);
-  const resolvedStoryUrl = resolveCmsAssetUrl(storyImage);
+  const resolvedHeroUrl = useAuthenticatedAssetUrl(heroImage);
+  const resolvedStoryUrl = useAuthenticatedAssetUrl(storyImage);
 
   const hasSocials = Boolean(facebookUrl || instagramUrl || youtubeUrl || linkedinUrl || twitterUrl);
   const hasContacts = Boolean(contactEmail || contactPhone || contactAddress || websiteUrl);
@@ -438,7 +519,7 @@ export default function PlatformAboutViewer({
 
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5 pt-2">
             {teamMembers.map((member) => {
-              const resolvedPhotoUrl = resolveCmsAssetUrl(member.profileImage);
+              const resolvedPhotoUrl = useAuthenticatedAssetUrl(member.profileImage);
               return (
                 <GlassCard
                   key={member.id || member.fullName}

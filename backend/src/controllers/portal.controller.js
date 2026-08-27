@@ -3,6 +3,7 @@ import fs from 'fs';
 import prisma from '../config/prisma.js';
 import { timeToMinutes } from '../services/timetableConflict.service.js';
 import { PUBLIC_LOGO_DIR, PROTECTED_SIGNATURE_DIR, PROTECTED_STAMP_DIR } from '../middleware/upload.middleware.js';
+import { processStorageUpload, getStorageResource, deleteStorageResource } from '../services/storage/storageResolver.js';
 
 const safeDeleteFile = (baseDir, filePathOrName) => {
   if (!filePathOrName) return;
@@ -534,36 +535,30 @@ export const uploadInstituteBrandingAsset = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Institute not found.' });
     }
 
-    const updateData = {};
-    const filename = path.basename(req.file.path || req.file.filename);
+    const ext = path.extname(req.file.originalname).toLowerCase();
     const targetDir = assetType === 'signature' ? PROTECTED_SIGNATURE_DIR : (assetType === 'stamp' ? PROTECTED_STAMP_DIR : PUBLIC_LOGO_DIR);
-    const targetPath = path.join(targetDir, filename);
+    const uniqueFilename = `branding_${assetType}_${Date.now()}_${Math.round(Math.random() * 1e9)}${ext}`;
+    const r2Key = `institutes/${req.instituteId}/branding/${assetType}s/${uniqueFilename}`;
 
-    // Relocate file if Multer stream placed it in another directory due to field ordering
-    if (req.file.path && path.resolve(req.file.path) !== path.resolve(targetPath) && fs.existsSync(req.file.path)) {
-      try {
-        fs.copyFileSync(req.file.path, targetPath);
-        fs.unlinkSync(req.file.path);
-      } catch (e) {
-        console.warn('Failed to relocate branding asset:', e);
-      }
-    }
+    const uploadResult = await processStorageUpload({
+      filePath: req.file.path,
+      r2Key,
+      localDir: targetDir,
+      localFilename: uniqueFilename,
+      mimeType: req.file.mimetype,
+      moduleName: `branding-${assetType}`,
+    });
 
+    const updateData = {};
     if (assetType === 'logo') {
-      if (institute.logo && institute.logo.includes('/uploads/branding/logos/public/')) {
-        safeDeleteFile(PUBLIC_LOGO_DIR, institute.logo);
-      }
-      updateData.logo = `/uploads/branding/logos/public/${filename}`;
+      if (institute.logo) await deleteStorageResource(institute.logo);
+      updateData.logo = uploadResult.storageRef;
     } else if (assetType === 'signature') {
-      if (institute.signatureImage) {
-        safeDeleteFile(PROTECTED_SIGNATURE_DIR, institute.signatureImage);
-      }
-      updateData.signatureImage = filename;
+      if (institute.signatureImage) await deleteStorageResource(institute.signatureImage);
+      updateData.signatureImage = uploadResult.storageRef;
     } else if (assetType === 'stamp') {
-      if (institute.stampImage) {
-        safeDeleteFile(PROTECTED_STAMP_DIR, institute.stampImage);
-      }
-      updateData.stampImage = filename;
+      if (institute.stampImage) await deleteStorageResource(institute.stampImage);
+      updateData.stampImage = uploadResult.storageRef;
     }
 
     const updated = await prisma.institute.update({
@@ -600,19 +595,13 @@ export const removeInstituteBrandingAsset = async (req, res) => {
 
     const updateData = {};
     if (assetType === 'logo') {
-      if (institute.logo && institute.logo.includes('/uploads/branding/logos/public/')) {
-        safeDeleteFile(PUBLIC_LOGO_DIR, institute.logo);
-      }
+      if (institute.logo) await deleteStorageResource(institute.logo);
       updateData.logo = null;
     } else if (assetType === 'signature') {
-      if (institute.signatureImage) {
-        safeDeleteFile(PROTECTED_SIGNATURE_DIR, institute.signatureImage);
-      }
+      if (institute.signatureImage) await deleteStorageResource(institute.signatureImage);
       updateData.signatureImage = null;
     } else if (assetType === 'stamp') {
-      if (institute.stampImage) {
-        safeDeleteFile(PROTECTED_STAMP_DIR, institute.stampImage);
-      }
+      if (institute.stampImage) await deleteStorageResource(institute.stampImage);
       updateData.stampImage = null;
     }
 
@@ -658,23 +647,25 @@ export const getProtectedBrandingAsset = async (req, res) => {
       return res.status(404).json({ success: false, message: `${assetType} has not been uploaded for this institute.` });
     }
 
-    const safeBasename = path.basename(filename);
-    const targetDir = assetType === 'signature' ? PROTECTED_SIGNATURE_DIR : PROTECTED_STAMP_DIR;
-    const filePath = path.resolve(targetDir, safeBasename);
+    let storageRef = filename;
+    if (!storageRef.startsWith('r2://') && !storageRef.startsWith('/')) {
+      const safeBasename = path.basename(filename);
+      const targetDir = assetType === 'signature' ? PROTECTED_SIGNATURE_DIR : PROTECTED_STAMP_DIR;
+      storageRef = path.join(targetDir, safeBasename);
+    }
 
-    if (!filePath.startsWith(path.resolve(targetDir)) || !fs.existsSync(filePath)) {
+    const resource = await getStorageResource(storageRef);
+    if (!resource || !resource.stream) {
       return res.status(404).json({ success: false, message: 'Requested asset file not found on server.' });
     }
 
-    const ext = path.extname(safeBasename).toLowerCase();
-    let contentType = 'image/png';
-    if (ext === '.jpg' || ext === '.jpeg') contentType = 'image/jpeg';
-    else if (ext === '.webp') contentType = 'image/webp';
-
-    res.setHeader('Content-Type', contentType);
+    res.setHeader('Content-Type', resource.contentType || 'image/png');
     res.setHeader('Cache-Control', 'private, no-cache, no-store, must-revalidate');
-    const stream = fs.createReadStream(filePath);
-    return stream.pipe(res);
+    if (resource.contentLength) {
+      res.setHeader('Content-Length', resource.contentLength);
+    }
+
+    return resource.stream.pipe(res);
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });
   }

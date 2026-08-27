@@ -3,6 +3,7 @@ import fs from 'fs';
 import jwt from 'jsonwebtoken';
 import prisma from '../config/prisma.js';
 import { PROTECTED_GALLERY_DIR } from '../middleware/upload.middleware.js';
+import { deleteStorageResource } from './storage/storageResolver.js';
 
 // Dedicated secret for short-lived media stream tickets (distinct from primary JWT)
 const MEDIA_STREAM_SECRET = process.env.MEDIA_STREAM_SECRET || 'edunexa_media_stream_secret_key_secure_2026';
@@ -40,21 +41,22 @@ export function verifyMediaStreamTicket(ticket) {
 }
 
 /**
- * Safely removes a file from the protected gallery directory
+ * Safely removes a file from storage (R2 or local volume)
  */
-export function safeDeleteGalleryFile(filename) {
+export async function safeDeleteGalleryFile(filename) {
   if (!filename) return false;
   try {
-    const safeBase = path.basename(filename);
-    const targetPath = path.join(PROTECTED_GALLERY_DIR, safeBase);
-    if (fs.existsSync(targetPath)) {
-      fs.unlinkSync(targetPath);
-      return true;
+    let storageRef = filename;
+    if (!storageRef.startsWith('r2://') && !storageRef.startsWith('/')) {
+      const safeBase = path.basename(filename);
+      storageRef = path.join(PROTECTED_GALLERY_DIR, safeBase);
     }
+    await deleteStorageResource(storageRef);
+    return true;
   } catch (err) {
     console.error(`Failed to delete gallery file: ${filename}`, err);
+    return false;
   }
-  return false;
 }
 
 /**
