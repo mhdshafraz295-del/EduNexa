@@ -624,7 +624,19 @@ export const removeInstituteBrandingAsset = async (req, res) => {
 export const getPublicInstituteLogo = async (req, res) => {
   try {
     const { instituteId } = req.params;
-    const instId = parseInt(instituteId, 10);
+    let instId = parseInt(instituteId, 10);
+
+    if (isNaN(instId) && req.params.instituteId === 'current') {
+      const token = req.headers.authorization?.split(' ')[1];
+      if (token) {
+        try {
+          const jwt = await import('jsonwebtoken');
+          const decoded = jwt.default.verify(token, process.env.JWT_SECRET || 'edunexa-secret');
+          instId = decoded.instituteId;
+        } catch (e) {}
+      }
+    }
+
     if (isNaN(instId)) {
       return res.status(400).json({ success: false, message: 'Invalid institute ID.' });
     }
@@ -664,8 +676,8 @@ export const getPublicInstituteLogo = async (req, res) => {
 export const getProtectedBrandingAsset = async (req, res) => {
   try {
     const assetType = req.params.type.toLowerCase();
-    if (!['logo', 'signature', 'stamp'].includes(assetType)) {
-      return res.status(400).json({ success: false, message: 'Invalid branding asset type.' });
+    if (!['signature', 'stamp'].includes(assetType)) {
+      return res.status(400).json({ success: false, message: 'Invalid protected branding asset type. Only signature and stamp require authentication.' });
     }
 
     const instituteId = req.instituteId;
@@ -675,16 +687,14 @@ export const getProtectedBrandingAsset = async (req, res) => {
 
     const institute = await prisma.institute.findUnique({
       where: { id: instituteId },
-      select: { id: true, logo: true, signatureImage: true, stampImage: true, isActive: true },
+      select: { id: true, signatureImage: true, stampImage: true, isActive: true },
     });
 
     if (!institute) {
       return res.status(404).json({ success: false, message: 'Institute not found.' });
     }
 
-    const filename = assetType === 'signature'
-      ? institute.signatureImage
-      : (assetType === 'stamp' ? institute.stampImage : institute.logo);
+    const filename = assetType === 'signature' ? institute.signatureImage : institute.stampImage;
 
     if (!filename) {
       return res.status(404).json({ success: false, message: `${assetType} has not been uploaded for this institute.` });
@@ -693,9 +703,7 @@ export const getProtectedBrandingAsset = async (req, res) => {
     let storageRef = filename;
     if (!storageRef.startsWith('r2://') && !storageRef.startsWith('/')) {
       const safeBasename = path.basename(filename);
-      const targetDir = assetType === 'signature'
-        ? PROTECTED_SIGNATURE_DIR
-        : (assetType === 'stamp' ? PROTECTED_STAMP_DIR : PUBLIC_LOGO_DIR);
+      const targetDir = assetType === 'signature' ? PROTECTED_SIGNATURE_DIR : PROTECTED_STAMP_DIR;
       storageRef = path.join(targetDir, safeBasename);
     }
 

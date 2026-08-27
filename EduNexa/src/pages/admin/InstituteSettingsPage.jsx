@@ -399,7 +399,7 @@ export default function InstituteSettingsPage() {
             <div className="flex items-center gap-4 pb-6 border-b border-slate-100">
               <div className="w-16 h-16 rounded-2xl bg-amber-50 border border-amber-200 flex items-center justify-center font-bold text-amber-800 text-xl overflow-hidden shrink-0">
                 {brandingState.logo ? (
-                  <img src={resolveInstituteLogoUrl(brandingState.logo)} alt={formData.name} className="w-full h-full object-contain p-1" />
+                  <img src={resolveInstituteLogoUrl(brandingState.logo, brandingState.updatedAt, institute?.id)} alt={formData.name} className="w-full h-full object-contain p-1" />
                 ) : (
                   <Building className="w-8 h-8 text-amber-600" />
                 )}

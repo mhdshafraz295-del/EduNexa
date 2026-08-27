@@ -13,17 +13,24 @@ export const getInstituteInitials = (name) => {
   return (parts[0][0] + parts[1][0]).toUpperCase();
 };
 
-export const resolveInstituteLogoUrl = (rawLogo, updatedAt) => {
+export const resolveInstituteLogoUrl = (rawLogo, updatedAt, instituteId) => {
   if (!rawLogo || typeof rawLogo !== 'string') return null;
   const trimmed = rawLogo.trim();
   if (trimmed.startsWith('blob:') || trimmed.startsWith('data:') || trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
     return trimmed;
   }
   const versionParam = updatedAt ? `?v=${new Date(updatedAt).getTime()}` : `?v=${Date.now()}`;
-  if (trimmed.startsWith('r2://') || trimmed.startsWith('/uploads/') || trimmed.startsWith('uploads/')) {
-    return `${API_BASE}/portal/branding-assets/logo${versionParam}`;
+  
+  let instId = instituteId;
+  if (!instId) {
+    const match = trimmed.match(/institutes\/(\d+)\//);
+    if (match && match[1]) {
+      instId = match[1];
+    }
   }
-  return `${API_BASE}/portal/branding-assets/logo${versionParam}`;
+
+  const targetId = instId || 'current';
+  return `${API_BASE}/portal/public-logo/${targetId}${versionParam}`;
 };
 
 export default function InstituteBrandingHeader({
@@ -45,7 +52,7 @@ export default function InstituteBrandingHeader({
 
   const name = institute?.name || 'EduNexa Institute';
   const code = institute?.code || 'EDU';
-  const logo = resolveInstituteLogoUrl(institute?.logo, institute?.updatedAt);
+  const logo = resolveInstituteLogoUrl(institute?.logo, institute?.updatedAt, institute?.id);
   const initials = getInstituteInitials(name);
 
   // Effective Signature & Stamp Sources (Prioritize passed props, then institute object URLs, then internal fetched URLs)

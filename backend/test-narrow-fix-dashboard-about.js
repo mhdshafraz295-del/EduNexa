@@ -3,17 +3,20 @@ import prisma from './src/config/prisma.js';
 import * as platformCmsService from './src/services/platformCms.service.js';
 
 const API_BASE = '/api';
-const resolveInstituteLogoUrl = (rawLogo, updatedAt) => {
+const resolveInstituteLogoUrl = (rawLogo, updatedAt, instituteId) => {
   if (!rawLogo || typeof rawLogo !== 'string') return null;
   const trimmed = rawLogo.trim();
   if (trimmed.startsWith('blob:') || trimmed.startsWith('data:') || trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
     return trimmed;
   }
   const versionParam = updatedAt ? `?v=${new Date(updatedAt).getTime()}` : `?v=${Date.now()}`;
-  if (trimmed.startsWith('r2://') || trimmed.startsWith('/uploads/') || trimmed.startsWith('uploads/')) {
-    return `${API_BASE}/portal/branding-assets/logo${versionParam}`;
+  let instId = instituteId;
+  if (!instId) {
+    const match = trimmed.match(/institutes\/(\d+)\//);
+    if (match && match[1]) instId = match[1];
   }
-  return `${API_BASE}/portal/branding-assets/logo${versionParam}`;
+  const targetId = instId || 'current';
+  return `${API_BASE}/portal/public-logo/${targetId}${versionParam}`;
 };
 
 /**
@@ -33,15 +36,15 @@ async function runNarrowFixTests() {
   const updatedAt = '2026-08-27T09:50:00.000Z';
   const resolvedR2Url = resolveInstituteLogoUrl(r2LogoRef, updatedAt);
 
-  assert(resolvedR2Url.includes('/portal/branding-assets/logo'), 'R2 logo must resolve to branding-assets proxy URL');
+  assert(resolvedR2Url.includes('/portal/public-logo/15'), 'R2 logo must resolve to unauthenticated public logo proxy URL');
   assert(resolvedR2Url.includes('?v='), 'R2 logo URL must contain cache-busting timestamp parameter');
-  console.log('  ✓ Test 1: R2 logo reference resolves to versioned proxy URL:', resolvedR2Url);
+  console.log('  ✓ Test 1: R2 logo reference resolves to versioned public proxy URL:', resolvedR2Url);
 
   // Test 2: Local volume logo URL resolution
   const localLogoRef = '/uploads/branding/logos/public/branding_logo_178780999_12345.png';
-  const resolvedLocalUrl = resolveInstituteLogoUrl(localLogoRef, updatedAt);
-  assert(resolvedLocalUrl.includes('/portal/branding-assets/logo'), 'Local volume logo must resolve to branding-assets proxy URL');
-  console.log('  ✓ Test 2: Local volume logo reference resolves to versioned proxy URL.');
+  const resolvedLocalUrl = resolveInstituteLogoUrl(localLogoRef, updatedAt, 15);
+  assert(resolvedLocalUrl.includes('/portal/public-logo/15'), 'Local volume logo must resolve to unauthenticated public logo proxy URL');
+  console.log('  ✓ Test 2: Local volume logo reference resolves to versioned public proxy URL.');
 
   // Test 3: HTTP/Blob URLs remain unmodified
   const httpUrl = 'https://example.com/logo.png';
