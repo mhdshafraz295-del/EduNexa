@@ -13,6 +13,7 @@ import {
   uploadInstituteBrandingAsset,
   removeInstituteBrandingAsset,
   getProtectedBrandingAsset,
+  getPublicInstituteLogo,
 } from '../controllers/portal.controller.js';
 import { authenticate } from '../middleware/auth.middleware.js';
 import { tenantMiddleware } from '../middleware/tenant.middleware.js';
@@ -21,6 +22,9 @@ import { requireActiveSubscription } from '../middleware/subscription.middleware
 import { uploadBrandingAsset } from '../middleware/upload.middleware.js';
 
 const router = Router();
+
+// Public Logo Endpoint (Unauthenticated)
+router.get('/public-logo/:instituteId', getPublicInstituteLogo);
 
 router.use(authenticate, tenantMiddleware, requireActiveSubscription);
 

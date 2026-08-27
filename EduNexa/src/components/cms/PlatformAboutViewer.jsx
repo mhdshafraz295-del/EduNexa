@@ -235,7 +235,7 @@ export default function PlatformAboutViewer({
         <div className="w-12 h-12 rounded-2xl bg-rose-50 border border-rose-200 text-rose-600 flex items-center justify-center mx-auto mb-3">
           <Info className="w-6 h-6" />
         </div>
-        <h3 className="text-lg font-black text-slate-900">Unable to Load Platform CMS</h3>
+        <h3 className="text-lg font-black text-slate-900">Unable to load About EduNexa</h3>
         <p className="text-sm text-slate-500 mt-1 mb-4">{error}</p>
         <button
           onClick={() => window.location.reload()}
@@ -254,7 +254,7 @@ export default function PlatformAboutViewer({
           <Sparkles className="w-7 h-7" />
         </div>
         <h3 className="text-xl font-black text-slate-900">
-          {isSuperAdmin ? 'No Published Platform CMS Yet' : 'Platform Information Coming Soon'}
+          No published EduNexa information is available yet.
         </h3>
         <p className="text-sm text-slate-500 mt-2 max-w-md mx-auto leading-relaxed">
           {isSuperAdmin
@@ -519,7 +519,6 @@ export default function PlatformAboutViewer({
 
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5 pt-2">
             {teamMembers.map((member) => {
-              const resolvedPhotoUrl = useAuthenticatedAssetUrl(member.profileImage);
               return (
                 <GlassCard
                   key={member.id || member.fullName}
@@ -539,9 +538,9 @@ export default function PlatformAboutViewer({
                         .toUpperCase() || 'EN'}
                     </span>
 
-                    {resolvedPhotoUrl && (
-                      <img
-                        src={resolvedPhotoUrl}
+                    {member.profileImage && (
+                      <CmsImage
+                        src={member.profileImage}
                         alt={member.fullName}
                         className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                         onError={(e) => {

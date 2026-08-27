@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { apiRequest, fetchProtectedAssetBlobUrl, revokeProtectedAssetBlobUrl } from '../../services/api';
+import { resolveInstituteLogoUrl } from './InstituteBrandingHeader';
 import { Upload, Trash2, RefreshCw, Check, AlertCircle, Image as ImageIcon, ShieldCheck } from 'lucide-react';
 
 const ALLOWED_TYPES = ['image/png', 'image/jpeg', 'image/webp'];
@@ -34,7 +35,7 @@ export default function BrandingImageUploader({
     const syncPreview = async () => {
       // 1. If logo, standard public URL or null
       if (type === 'logo') {
-        setPreviewSrc(currentUrl || null);
+        setPreviewSrc(resolveInstituteLogoUrl(currentUrl) || null);
         setImgError(false);
         return;
       }

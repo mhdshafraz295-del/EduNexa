@@ -621,11 +621,51 @@ export const removeInstituteBrandingAsset = async (req, res) => {
   }
 };
 
+export const getPublicInstituteLogo = async (req, res) => {
+  try {
+    const { instituteId } = req.params;
+    const instId = parseInt(instituteId, 10);
+    if (isNaN(instId)) {
+      return res.status(400).json({ success: false, message: 'Invalid institute ID.' });
+    }
+
+    const institute = await prisma.institute.findUnique({
+      where: { id: instId },
+      select: { logo: true },
+    });
+
+    if (!institute || !institute.logo) {
+      return res.status(404).json({ success: false, message: 'Logo not found for this institute.' });
+    }
+
+    let storageRef = institute.logo;
+    if (!storageRef.startsWith('r2://') && !storageRef.startsWith('/')) {
+      const safeBasename = path.basename(institute.logo);
+      storageRef = path.join(PUBLIC_LOGO_DIR, safeBasename);
+    }
+
+    const resource = await getStorageResource(storageRef);
+    if (!resource || !resource.stream) {
+      return res.status(404).json({ success: false, message: 'Logo file not found.' });
+    }
+
+    res.setHeader('Content-Type', resource.contentType || 'image/png');
+    res.setHeader('Cache-Control', 'public, max-age=3600');
+    if (resource.contentLength) {
+      res.setHeader('Content-Length', resource.contentLength);
+    }
+
+    return resource.stream.pipe(res);
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 export const getProtectedBrandingAsset = async (req, res) => {
   try {
     const assetType = req.params.type.toLowerCase();
-    if (!['signature', 'stamp'].includes(assetType)) {
-      return res.status(400).json({ success: false, message: 'Invalid protected asset type.' });
+    if (!['logo', 'signature', 'stamp'].includes(assetType)) {
+      return res.status(400).json({ success: false, message: 'Invalid branding asset type.' });
     }
 
     const instituteId = req.instituteId;
@@ -635,14 +675,17 @@ export const getProtectedBrandingAsset = async (req, res) => {
 
     const institute = await prisma.institute.findUnique({
       where: { id: instituteId },
-      select: { id: true, signatureImage: true, stampImage: true, isActive: true },
+      select: { id: true, logo: true, signatureImage: true, stampImage: true, isActive: true },
     });
 
     if (!institute) {
       return res.status(404).json({ success: false, message: 'Institute not found.' });
     }
 
-    const filename = assetType === 'signature' ? institute.signatureImage : institute.stampImage;
+    const filename = assetType === 'signature'
+      ? institute.signatureImage
+      : (assetType === 'stamp' ? institute.stampImage : institute.logo);
+
     if (!filename) {
       return res.status(404).json({ success: false, message: `${assetType} has not been uploaded for this institute.` });
     }
@@ -650,7 +693,9 @@ export const getProtectedBrandingAsset = async (req, res) => {
     let storageRef = filename;
     if (!storageRef.startsWith('r2://') && !storageRef.startsWith('/')) {
       const safeBasename = path.basename(filename);
-      const targetDir = assetType === 'signature' ? PROTECTED_SIGNATURE_DIR : PROTECTED_STAMP_DIR;
+      const targetDir = assetType === 'signature'
+        ? PROTECTED_SIGNATURE_DIR
+        : (assetType === 'stamp' ? PROTECTED_STAMP_DIR : PUBLIC_LOGO_DIR);
       storageRef = path.join(targetDir, safeBasename);
     }
 
