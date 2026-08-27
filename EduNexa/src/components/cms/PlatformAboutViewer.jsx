@@ -186,6 +186,10 @@ export default function PlatformAboutViewer({
   const [heroImgError, setHeroImgError] = useState(false);
   const [storyImgError, setStoryImgError] = useState(false);
 
+  // ALL HOOKS MUST EXECUTE AT THE TOP OF THE COMPONENT BEFORE ANY CONDITIONAL EARLY RETURN
+  const resolvedHeroUrl = useAuthenticatedAssetUrl(cmsData?.heroImage);
+  const resolvedStoryUrl = useAuthenticatedAssetUrl(cmsData?.storyImage);
+
   useEffect(() => {
     if (previewData) {
       setCmsData(previewData);
@@ -292,9 +296,6 @@ export default function PlatformAboutViewer({
     features = [],
     teamMembers = [],
   } = cmsData;
-
-  const resolvedHeroUrl = useAuthenticatedAssetUrl(heroImage);
-  const resolvedStoryUrl = useAuthenticatedAssetUrl(storyImage);
 
   const hasSocials = Boolean(facebookUrl || instagramUrl || youtubeUrl || linkedinUrl || twitterUrl);
   const hasContacts = Boolean(contactEmail || contactPhone || contactAddress || websiteUrl);
