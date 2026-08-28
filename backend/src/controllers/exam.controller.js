@@ -3132,6 +3132,7 @@ export const exportMarksCsvTemplate = async (req, res) => {
       where: { id: examId, instituteId },
       include: {
         subject: true,
+        results: true,
         class: {
           include: {
             studentEnrollments: {
@@ -3155,7 +3156,12 @@ export const exportMarksCsvTemplate = async (req, res) => {
     }
 
     const students = (exam.class?.studentEnrollments || []).map((e) => e.student);
-    const csvData = generateMarksCsvTemplate(exam, students);
+    const resultsMap = new Map();
+    (exam.results || []).forEach((r) => {
+      resultsMap.set(r.studentId, r);
+    });
+
+    const csvData = generateMarksCsvTemplate(exam, students, resultsMap);
 
     const classNameClean = (exam.class?.name || 'Class').replace(/[^a-zA-Z0-9]/g, '_');
     const examNameClean = (exam.title || 'Exam').replace(/[^a-zA-Z0-9]/g, '_');

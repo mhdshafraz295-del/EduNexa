@@ -240,11 +240,25 @@ export default function WrittenMarkingPage() {
 
   // Select student for split workspace
   const handleSelectStudent = (sub) => {
-    setSelectedStudent(sub);
-    setMarksInput(sub.result?.marks !== undefined && sub.result?.marks !== null ? String(sub.result.marks) : '');
-    setFeedbackInput(sub.result?.teacherFeedback || '');
+    const latest = submissions.find((s) => s.studentId === sub.studentId) || sub;
+    setSelectedStudent(latest);
+    const existingMarks = latest.result?.marks ?? latest.attempt?.score;
+    const existingFeedback = latest.result?.teacherFeedback ?? latest.attempt?.teacherFeedback;
+    setMarksInput(existingMarks !== undefined && existingMarks !== null ? String(existingMarks) : '');
+    setFeedbackInput(existingFeedback || '');
     setActiveTab('split_marking');
   };
+
+  // Synchronize form inputs when active selected student changes
+  useEffect(() => {
+    if (selectedStudent) {
+      const current = submissions.find((s) => s.studentId === selectedStudent.studentId) || selectedStudent;
+      const existingMarks = current.result?.marks ?? current.attempt?.score;
+      const existingFeedback = current.result?.teacherFeedback ?? current.attempt?.teacherFeedback;
+      setMarksInput(existingMarks !== undefined && existingMarks !== null ? String(existingMarks) : '');
+      setFeedbackInput(existingFeedback || '');
+    }
+  }, [selectedStudent?.studentId]);
 
   // Individual Marking Save (with Published Warning Audit)
   const handleSaveIndividualMark = async (isDraft = false) => {
@@ -281,11 +295,10 @@ export default function WrittenMarkingPage() {
         setShowAuditModal(false);
         setPendingAction(null);
         await fetchSubmissions();
-        // Keep selected student updated
-        setSelectedStudent((prev) => ({
-          ...prev,
-          result: res.data.data,
-        }));
+        const updatedResult = res.data.data;
+        setSelectedStudent((prev) => (prev ? { ...prev, result: updatedResult } : null));
+        setMarksInput(updatedResult?.marks !== undefined && updatedResult?.marks !== null ? String(updatedResult.marks) : '');
+        setFeedbackInput(updatedResult?.teacherFeedback || '');
       }
     } catch (err) {
       showToast(err.response?.data?.message || 'Failed to save marks', 'error');
