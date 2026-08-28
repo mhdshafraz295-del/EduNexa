@@ -1170,7 +1170,7 @@ export default function MessagingWorkspace({ portalRole = 'ADMIN' }) {
       {isBroadcastModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs">
           <div className="w-full max-w-lg bg-white rounded-2xl shadow-xl border border-slate-200 overflow-hidden flex flex-col max-h-[90vh]">
-            <div className="p-4 border-b border-slate-200 flex items-center justify-between bg-amber-50/50">
+            <div className="p-4 border-b border-slate-200 flex items-center justify-between bg-amber-50/50 flex-shrink-0">
               <h3 className="text-sm font-black text-slate-900 flex items-center gap-2">
                 <Megaphone className="w-4 h-4 text-amber-700" />
                 <span>Compose Institute Broadcast</span>
@@ -1180,115 +1180,117 @@ export default function MessagingWorkspace({ portalRole = 'ADMIN' }) {
               </button>
             </div>
 
-            <form onSubmit={(e) => { e.preventDefault(); setShowSendConfirmation(true); }} className="p-4 overflow-y-auto space-y-4 flex-1">
-              {broadcastModalError && (
-                <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-center gap-2">
-                  <AlertCircle className="w-4 h-4 flex-shrink-0" />
-                  <span>{broadcastModalError}</span>
-                </div>
-              )}
+            <form onSubmit={(e) => { e.preventDefault(); setShowSendConfirmation(true); }} className="flex flex-col flex-1 min-h-0 overflow-hidden">
+              <div className="p-4 overflow-y-auto space-y-4 flex-1 min-h-0">
+                {broadcastModalError && (
+                  <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-center gap-2">
+                    <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                    <span>{broadcastModalError}</span>
+                  </div>
+                )}
 
-              {/* Target Audience Selector */}
-              <div className="space-y-1.5">
-                <label className="block text-xs font-bold text-slate-700">Target Audience *</label>
-                <select
-                  value={audienceType}
-                  onChange={(e) => setAudienceType(e.target.value)}
-                  className="w-full p-2.5 text-xs rounded-xl bg-slate-100 border border-slate-200 focus:ring-2 focus:ring-[#FFD978] font-medium"
-                >
-                  <option value="ALL_STUDENTS">All Students (Active)</option>
-                  <option value="ALL_TEACHERS">All Faculty & Teachers (Active)</option>
-                  <option value="ALL_PARENTS">All Parents / Guardians (Active)</option>
-                  <option value="ALL_USERS">All Institute Members (Admins, Teachers, Students, Parents)</option>
-                  <option value="CLASS_STUDENTS">Students of Specific Class</option>
-                  <option value="CLASS_TEACHERS">Teachers assigned to Specific Class</option>
-                  <option value="CLASS_PARENTS">Parents of Students in Specific Class</option>
-                </select>
-              </div>
-
-              {/* Specific Class Selector if CLASS_* selected */}
-              {audienceType.startsWith('CLASS_') && (
+                {/* Target Audience Selector */}
                 <div className="space-y-1.5">
-                  <label className="block text-xs font-bold text-slate-700">Select Academic Class *</label>
+                  <label className="block text-xs font-bold text-slate-700">Target Audience *</label>
                   <select
-                    value={selectedClassId}
-                    onChange={(e) => setSelectedClassId(e.target.value)}
-                    className="w-full p-2.5 text-xs rounded-xl bg-slate-100 border border-slate-200 focus:ring-2 focus:ring-[#FFD978]"
+                    value={audienceType}
+                    onChange={(e) => setAudienceType(e.target.value)}
+                    className="w-full p-2.5 text-xs rounded-xl bg-slate-100 border border-slate-200 focus:ring-2 focus:ring-[#FFD978] font-medium"
                   >
-                    <option value="">-- Choose Class --</option>
-                    {classesList.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.name} {c.section ? `(${c.section})` : ''}
-                      </option>
-                    ))}
+                    <option value="ALL_STUDENTS">All Students (Active)</option>
+                    <option value="ALL_TEACHERS">All Faculty & Teachers (Active)</option>
+                    <option value="ALL_PARENTS">All Parents / Guardians (Active)</option>
+                    <option value="ALL_USERS">All Institute Members (Admins, Teachers, Students, Parents)</option>
+                    <option value="CLASS_STUDENTS">Students of Specific Class</option>
+                    <option value="CLASS_TEACHERS">Teachers assigned to Specific Class</option>
+                    <option value="CLASS_PARENTS">Parents of Students in Specific Class</option>
                   </select>
                 </div>
-              )}
 
-              {/* Live Audience Preview Counter Badge */}
-              <div className="p-3 rounded-xl bg-amber-50/80 border border-amber-200/80 flex items-center justify-between text-xs">
-                <div className="flex items-center gap-2">
-                  <Users className="w-4 h-4 text-amber-700" />
-                  <span className="font-bold text-slate-800">Estimated Delivery:</span>
+                {/* Specific Class Selector if CLASS_* selected */}
+                {audienceType.startsWith('CLASS_') && (
+                  <div className="space-y-1.5">
+                    <label className="block text-xs font-bold text-slate-700">Select Academic Class *</label>
+                    <select
+                      value={selectedClassId}
+                      onChange={(e) => setSelectedClassId(e.target.value)}
+                      className="w-full p-2.5 text-xs rounded-xl bg-slate-100 border border-slate-200 focus:ring-2 focus:ring-[#FFD978]"
+                    >
+                      <option value="">-- Choose Class --</option>
+                      {classesList.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.name} {c.section ? `(${c.section})` : ''}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
+                {/* Live Audience Preview Counter Badge */}
+                <div className="p-3 rounded-xl bg-amber-50/80 border border-amber-200/80 flex items-center justify-between text-xs">
+                  <div className="flex items-center gap-2">
+                    <Users className="w-4 h-4 text-amber-700" />
+                    <span className="font-bold text-slate-800">Estimated Delivery:</span>
+                  </div>
+                  <div className="font-black text-amber-900 font-mono">
+                    {previewLoading ? 'Calculating...' : `${previewStats?.recipientCount || 0} Recipients`}
+                  </div>
                 </div>
-                <div className="font-black text-amber-900 font-mono">
-                  {previewLoading ? 'Calculating...' : `${previewStats?.recipientCount || 0} Recipients`}
+
+                {/* Broadcast Title */}
+                <div className="space-y-1">
+                  <label className="block text-xs font-bold text-slate-700">Broadcast Title *</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Mid-Term Assessment Schedule & Guidelines"
+                    value={broadcastTitle}
+                    onChange={(e) => setBroadcastTitle(e.target.value)}
+                    className="w-full p-2.5 text-xs rounded-xl bg-slate-100 border border-slate-200 focus:ring-2 focus:ring-[#FFD978]"
+                  />
+                </div>
+
+                {/* Broadcast Message Body */}
+                <div className="space-y-1">
+                  <label className="block text-xs font-bold text-slate-700">Message Content *</label>
+                  <textarea
+                    rows={4}
+                    placeholder="Write the official announcement message here..."
+                    value={broadcastBody}
+                    onChange={(e) => setBroadcastBody(e.target.value)}
+                    className="w-full p-2.5 text-xs rounded-xl bg-slate-100 border border-slate-200 focus:ring-2 focus:ring-[#FFD978]"
+                  />
+                </div>
+
+                {/* Attachment */}
+                <div className="space-y-1">
+                  <label className="block text-xs font-bold text-slate-700">Attachment (Optional)</label>
+                  <input
+                    type="file"
+                    ref={broadcastFileInputRef}
+                    onChange={(e) => setBroadcastFile(e.target.files?.[0] || null)}
+                    accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx"
+                    className="w-full text-xs text-slate-600 file:mr-3 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-slate-900 file:text-white hover:file:bg-slate-800"
+                  />
+                  <p className="text-[10px] text-slate-400">Accepted: PDF, JPG, PNG, WEBP, DOC, DOCX (Max 10MB)</p>
+                </div>
+
+                {/* Allow Direct Replies Toggle */}
+                <div className="flex items-center gap-2 p-3 rounded-xl bg-slate-50 border border-slate-200">
+                  <input
+                    type="checkbox"
+                    id="allowRepliesCheck"
+                    checked={allowReplies}
+                    onChange={(e) => setAllowReplies(e.target.checked)}
+                    className="rounded text-amber-500 focus:ring-amber-400"
+                  />
+                  <label htmlFor="allowRepliesCheck" className="text-xs text-slate-700 font-medium cursor-pointer">
+                    Allow recipients to reply privately to Institute Administration
+                  </label>
                 </div>
               </div>
 
-              {/* Broadcast Title */}
-              <div className="space-y-1">
-                <label className="block text-xs font-bold text-slate-700">Broadcast Title *</label>
-                <input
-                  type="text"
-                  placeholder="e.g. Mid-Term Assessment Schedule & Guidelines"
-                  value={broadcastTitle}
-                  onChange={(e) => setBroadcastTitle(e.target.value)}
-                  className="w-full p-2.5 text-xs rounded-xl bg-slate-100 border border-slate-200 focus:ring-2 focus:ring-[#FFD978]"
-                />
-              </div>
-
-              {/* Broadcast Message Body */}
-              <div className="space-y-1">
-                <label className="block text-xs font-bold text-slate-700">Message Content *</label>
-                <textarea
-                  rows={4}
-                  placeholder="Write the official announcement message here..."
-                  value={broadcastBody}
-                  onChange={(e) => setBroadcastBody(e.target.value)}
-                  className="w-full p-2.5 text-xs rounded-xl bg-slate-100 border border-slate-200 focus:ring-2 focus:ring-[#FFD978]"
-                />
-              </div>
-
-              {/* Attachment */}
-              <div className="space-y-1">
-                <label className="block text-xs font-bold text-slate-700">Attachment (Optional)</label>
-                <input
-                  type="file"
-                  ref={broadcastFileInputRef}
-                  onChange={(e) => setBroadcastFile(e.target.files?.[0] || null)}
-                  accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx"
-                  className="w-full text-xs text-slate-600 file:mr-3 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-slate-900 file:text-white hover:file:bg-slate-800"
-                />
-                <p className="text-[10px] text-slate-400">Accepted: PDF, JPG, PNG, WEBP, DOC, DOCX (Max 10MB)</p>
-              </div>
-
-              {/* Allow Direct Replies Toggle */}
-              <div className="flex items-center gap-2 p-3 rounded-xl bg-slate-50 border border-slate-200">
-                <input
-                  type="checkbox"
-                  id="allowRepliesCheck"
-                  checked={allowReplies}
-                  onChange={(e) => setAllowReplies(e.target.checked)}
-                  className="rounded text-amber-500 focus:ring-amber-400"
-                />
-                <label htmlFor="allowRepliesCheck" className="text-xs text-slate-700 font-medium cursor-pointer">
-                  Allow recipients to reply privately to Institute Administration
-                </label>
-              </div>
-
-              {/* Modal Footer */}
-              <div className="pt-3 border-t border-slate-200 flex items-center justify-end gap-2">
+              {/* Modal Footer (Sticky / Always Visible at Bottom) */}
+              <div className="p-4 border-t border-slate-200 bg-white flex items-center justify-end gap-2 flex-shrink-0">
                 <button
                   type="button"
                   onClick={() => setIsBroadcastModalOpen(false)}
