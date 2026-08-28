@@ -153,10 +153,13 @@ export async function getStorageResource(storageRef, options = {}) {
   } else if (!path.isAbsolute(storageRef)) {
     const candidate1 = path.join(process.cwd(), storageRef);
     const candidate2 = path.join(process.cwd(), 'backend', storageRef);
+    const candidate3 = path.join(process.cwd(), 'uploads', 'branding', 'logos', 'public', path.basename(storageRef));
     if (fs.existsSync(candidate1)) {
       resolvedPath = candidate1;
     } else if (fs.existsSync(candidate2)) {
       resolvedPath = candidate2;
+    } else if (fs.existsSync(candidate3)) {
+      resolvedPath = candidate3;
     } else {
       resolvedPath = candidate1;
     }
@@ -197,6 +200,35 @@ export async function getStorageResource(storageRef, options = {}) {
   }
 
   return null;
+}
+
+/**
+ * Helper to fetch a storage resource as a binary Buffer.
+ * Works seamlessly for Cloudflare R2 storage (r2://...) and local volume files.
+ *
+ * @param {string} storageRef - Storage reference string (r2://... or /uploads/...)
+ * @returns {Promise<Buffer|null>}
+ */
+export async function getStorageResourceBuffer(storageRef) {
+  if (!storageRef || typeof storageRef !== 'string') {
+    return null;
+  }
+
+  try {
+    const resource = await getStorageResource(storageRef);
+    if (!resource || !resource.stream) {
+      return null;
+    }
+
+    const chunks = [];
+    for await (const chunk of resource.stream) {
+      chunks.push(typeof chunk === 'string' ? Buffer.from(chunk) : chunk);
+    }
+    return Buffer.concat(chunks);
+  } catch (err) {
+    console.error(`[storage] Failed to load buffer for '${storageRef}':`, err.message);
+    return null;
+  }
 }
 
 /**

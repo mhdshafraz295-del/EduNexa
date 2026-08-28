@@ -3485,7 +3485,7 @@ export const downloadOfficialResultPdf = async (req, res) => {
       where: { id: instituteId },
     });
 
-    const doc = generateOfficialResultPdf({
+    const doc = await generateOfficialResultPdf({
       result,
       student,
       exam,
@@ -3605,7 +3605,7 @@ export const getStudentResultPdf = async (req, res) => {
       where: { id: instituteId },
     });
 
-    const doc = generateOfficialResultPdf({
+    const doc = await generateOfficialResultPdf({
       result,
       student,
       exam: result.exam,

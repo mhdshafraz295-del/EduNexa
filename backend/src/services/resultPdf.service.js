@@ -2,14 +2,15 @@ import PDFDocument from 'pdfkit';
 import path from 'path';
 import fs from 'fs';
 import { PUBLIC_LOGO_DIR, PROTECTED_SIGNATURE_DIR, PROTECTED_STAMP_DIR } from '../middleware/upload.middleware.js';
+import { getStorageResourceBuffer } from './storage/storageResolver.js';
 
 /**
  * Generate Official Institute-Branded Result PDF Stream
  * 
  * @param {Object} data - Contains result, student, exam, institute, academicYear, class, subject
- * @returns {PDFDocument} - PDF stream ready to pipe to response
+ * @returns {Promise<PDFDocument>} - PDF stream ready to pipe to response
  */
-export function generateOfficialResultPdf(data) {
+export async function generateOfficialResultPdf(data) {
   const {
     result,
     student,
@@ -39,24 +40,27 @@ export function generateOfficialResultPdf(data) {
   // -------------------------------------------------------------
   let currentY = 40;
 
-  // Resolve Logo path if exists
-  let logoPath = null;
+  // Resolve Logo buffer if exists (supports R2 and local storage)
+  let logoBuffer = null;
   if (institute?.logo) {
-    const filename = path.basename(institute.logo);
-    const candidatePath = path.join(PUBLIC_LOGO_DIR, filename);
-    if (fs.existsSync(candidatePath)) {
-      logoPath = candidatePath;
+    try {
+      logoBuffer = await getStorageResourceBuffer(institute.logo);
+    } catch (err) {
+      console.warn('[PDF] Failed to fetch institute logo buffer:', err.message);
     }
   }
 
-  if (logoPath) {
+  if (logoBuffer) {
     try {
-      doc.image(logoPath, pageMargin, currentY, { width: 60, height: 60, fit: [60, 60] });
+      doc.image(logoBuffer, pageMargin, currentY, { width: 60, height: 60, fit: [60, 60] });
     } catch (e) {
-      console.warn('Failed to embed logo in PDF:', e);
+      console.warn('[PDF] Failed to embed logo in PDF:', e.message);
+      logoBuffer = null;
     }
-  } else {
-    // Elegant Monogram box
+  }
+
+  if (!logoBuffer) {
+    // Elegant Monogram box fallback
     const initials = institute?.name ? institute.name.slice(0, 2).toUpperCase() : 'IN';
     doc.rect(pageMargin, currentY, 60, 60).fillAndStroke('#1E293B', '#CBD5E1');
     doc.fillColor('#FFD978').fontSize(20).font('Helvetica-Bold').text(initials, pageMargin + 15, currentY + 18);
