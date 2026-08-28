@@ -32,6 +32,7 @@ import TimetablePage from './pages/admin/timetable/TimetablePage';
 import AttendancePage from './pages/admin/attendance/AttendancePage';
 import StudentsPage from './pages/admin/StudentsPage';
 import TeachersPage from './pages/admin/TeachersPage';
+import ParentsPage from './pages/admin/ParentsPage';
 import InvoicesPage from './pages/admin/InvoicesPage';
 import InstituteSettingsPage from './pages/admin/InstituteSettingsPage';
 import ExamsPage from './pages/admin/exams/ExamsPage';
@@ -212,7 +213,7 @@ export default function App() {
                 path="parents"
                 element={
                   <FeatureGuard featureCode="PARENT_PORTAL" featureName="Parent Management">
-                    <ParentPortal />
+                    <ParentsPage />
                   </FeatureGuard>
                 }
               />

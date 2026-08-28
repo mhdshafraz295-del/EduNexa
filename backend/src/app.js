@@ -23,6 +23,7 @@ import referralRoutes from './routes/referral.routes.js';
 import platformCmsRoutes from './routes/platformCms.routes.js';
 import studyMaterialRoutes from './routes/studyMaterial.routes.js';
 import pollRoutes from './routes/poll.routes.js';
+import parentRoutes from './routes/parent.routes.js';
 
 import path from 'path';
 
@@ -81,6 +82,7 @@ app.use('/api/referrals', referralRoutes);
 app.use('/api/platform-cms', platformCmsRoutes);
 app.use('/api/study-materials', studyMaterialRoutes);
 app.use('/api/polls', pollRoutes);
+app.use('/api/parents', parentRoutes);
 app.use('/api/portal', portalRoutes);
 
 // Global 404 handler
