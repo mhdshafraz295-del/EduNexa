@@ -269,8 +269,35 @@ export const getStudentPortalDashboard = async (req, res) => {
     let allTimetableSessions = [];
 
     if (currentClass) {
-      const [subjectsRes, sessionsRes] = await Promise.all([
-        prisma.classSubject.findMany({
+      const sessionsRes = await prisma.timetableSession.findMany({
+        where: { classId: currentClass.id, instituteId, isActive: true },
+        include: { subject: true, teacher: true, class: true },
+        orderBy: [{ dayOfWeek: 'asc' }, { startTime: 'asc' }],
+      });
+
+      if (student.subjectsConfigured) {
+        // EXPLICITLY CONFIGURED: Return ONLY per-student subject enrollments (even if [])
+        const studentSubRes = await prisma.studentSubject.findMany({
+          where: { studentId: student.id, instituteId },
+          include: {
+            subject: {
+              include: {
+                teacherAssignments: {
+                  where: { classId: currentClass.id },
+                  include: { teacher: true },
+                },
+              },
+            },
+          },
+        });
+        classSubjects = studentSubRes.map((ss) => ss.subject).filter(Boolean);
+
+        // Filter timetable sessions to match assigned student subjects
+        const assignedSubjectIds = new Set(classSubjects.map((s) => s.id));
+        allTimetableSessions = sessionsRes.filter((s) => s.subjectId && assignedSubjectIds.has(s.subjectId));
+      } else {
+        // LEGACY UNCONFIGURED STUDENT: Fallback to all class subjects
+        const subjectsRes = await prisma.classSubject.findMany({
           where: { classId: currentClass.id, instituteId },
           include: {
             subject: {
@@ -282,16 +309,10 @@ export const getStudentPortalDashboard = async (req, res) => {
               },
             },
           },
-        }),
-        prisma.timetableSession.findMany({
-          where: { classId: currentClass.id, instituteId, isActive: true },
-          include: { subject: true, teacher: true, class: true },
-          orderBy: [{ dayOfWeek: 'asc' }, { startTime: 'asc' }],
-        }),
-      ]);
-
-      classSubjects = subjectsRes.map((cs) => cs.subject).filter(Boolean);
-      allTimetableSessions = sessionsRes;
+        });
+        classSubjects = subjectsRes.map((cs) => cs.subject).filter(Boolean);
+        allTimetableSessions = sessionsRes;
+      }
     }
 
     // Zoom link sanitization
@@ -400,8 +421,38 @@ export const getParentPortalDashboard = async (req, res) => {
         let timetableSessions = [];
 
         if (currentClass) {
-          const [subRes, sessRes] = await Promise.all([
-            prisma.classSubject.findMany({
+          const sessRes = await prisma.timetableSession.findMany({
+            where: { classId: currentClass.id, instituteId, isActive: true },
+            include: { subject: true, teacher: true, class: true },
+            orderBy: [{ dayOfWeek: 'asc' }, { startTime: 'asc' }],
+          });
+
+          if (student.subjectsConfigured) {
+            const studentSubRes = await prisma.studentSubject.findMany({
+              where: { studentId: student.id, instituteId },
+              include: {
+                subject: {
+                  include: {
+                    teacherAssignments: {
+                      where: { classId: currentClass.id },
+                      include: { teacher: true },
+                    },
+                  },
+                },
+              },
+            });
+            subjects = studentSubRes.map((ss) => ss.subject).filter(Boolean);
+            const assignedSubIds = new Set(subjects.map((s) => s.id));
+            const filteredSess = sessRes.filter((s) => s.subjectId && assignedSubIds.has(s.subjectId));
+
+            timetableSessions = filteredSess.map((s) => {
+              if (!hasZoomFeature) {
+                return { ...s, meetingUrl: null, meetingId: null, meetingPassword: null };
+              }
+              return s;
+            });
+          } else {
+            const subRes = await prisma.classSubject.findMany({
               where: { classId: currentClass.id, instituteId },
               include: {
                 subject: {
@@ -413,21 +464,15 @@ export const getParentPortalDashboard = async (req, res) => {
                   },
                 },
               },
-            }),
-            prisma.timetableSession.findMany({
-              where: { classId: currentClass.id, instituteId, isActive: true },
-              include: { subject: true, teacher: true, class: true },
-              orderBy: [{ dayOfWeek: 'asc' }, { startTime: 'asc' }],
-            }),
-          ]);
-
-          subjects = subRes.map((cs) => cs.subject).filter(Boolean);
-          timetableSessions = sessRes.map((s) => {
-            if (!hasZoomFeature) {
-              return { ...s, meetingUrl: null, meetingId: null, meetingPassword: null };
-            }
-            return s;
-          });
+            });
+            subjects = subRes.map((cs) => cs.subject).filter(Boolean);
+            timetableSessions = sessRes.map((s) => {
+              if (!hasZoomFeature) {
+                return { ...s, meetingUrl: null, meetingId: null, meetingPassword: null };
+              }
+              return s;
+            });
+          }
         }
 
         const todaySessions = timetableSessions.filter((s) => s.dayOfWeek === todayDayOfWeek);
