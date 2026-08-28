@@ -209,6 +209,14 @@ export default function App() {
                 }
               />
               <Route
+                path="parents"
+                element={
+                  <FeatureGuard featureCode="PARENT_PORTAL" featureName="Parent Management">
+                    <ParentPortal />
+                  </FeatureGuard>
+                }
+              />
+              <Route
                 path="invoices"
                 element={
                   <FeatureGuard featureCode="INVOICES" featureName="Invoices & Billing">
