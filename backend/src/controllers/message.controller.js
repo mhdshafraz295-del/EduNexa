@@ -1,6 +1,7 @@
 import path from 'path';
 import * as messageService from '../services/message.service.js';
 import * as relationshipService from '../services/messageRelationship.service.js';
+import { getStorageResource } from '../services/storage/storageResolver.js';
 
 export const getRecipients = async (req, res, next) => {
   try {
