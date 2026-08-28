@@ -109,6 +109,7 @@ export default function InstituteLayout() {
     { label: 'Messages', path: '/admin/messages', icon: MessageSquare, feature: 'INTERNAL_MESSAGES', badge: unreadMessages },
     { label: 'Students Directory', path: '/admin/students', icon: Users, feature: 'STUDENT_MANAGEMENT' },
     { label: 'Teachers & Faculty', path: '/admin/teachers', icon: Users, feature: 'TEACHER_MANAGEMENT' },
+    { label: 'Parent Management', path: '/admin/students', icon: Users, feature: 'PARENT_PORTAL' },
     { label: 'Invoices & Fees', path: '/admin/invoices', icon: Receipt, feature: 'INVOICES' },
     { label: 'Institute Profile & Settings', path: '/admin/settings', icon: Settings },
     { label: 'About EduNexa', path: '/admin/about', icon: Info },
