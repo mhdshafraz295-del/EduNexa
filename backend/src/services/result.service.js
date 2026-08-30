@@ -470,24 +470,35 @@ export async function bulkSaveMarks({ instituteId, examId, marksList, markerId, 
 /**
  * Generate CSV Template with real eligible students and existing saved marks/feedback
  */
-export function generateMarksCsvTemplate(exam, students, resultsMap = new Map()) {
+export function generateMarksCsvTemplate(exam, students, resultsMap = new Map(), attemptsMap = new Map()) {
   const headers = ['AdmissionNumber', 'StudentName', 'RollNo', 'Marks', 'Feedback'];
+
+  const escapeCsvCell = (val) => {
+    if (val === undefined || val === null) return '""';
+    const str = String(val);
+    return `"${str.replace(/"/g, '""')}"`;
+  };
+
   const rows = students.map((s) => {
     const res = resultsMap.get(s.id);
-    const marksVal = res?.marks !== undefined && res?.marks !== null ? res.marks : '';
-    const rawFeedback = res?.teacherFeedback ? String(res.teacherFeedback) : '';
-    const feedbackEscaped = rawFeedback ? `"${rawFeedback.replace(/"/g, '""')}"` : '""';
+    const att = attemptsMap.get(s.id);
+
+    const marksVal = res?.marks !== undefined && res?.marks !== null
+      ? res.marks
+      : (att?.score !== undefined && att?.score !== null ? att.score : '');
+
+    const rawFeedback = res?.teacherFeedback || att?.teacherFeedback || '';
 
     return [
-      `"${s.admissionNumber || s.id}"`,
-      `"${(s.name || '').replace(/"/g, '""')}"`,
-      `"${s.rollNo || ''}"`,
+      escapeCsvCell(s.admissionNumber || s.id),
+      escapeCsvCell(s.name || ''),
+      escapeCsvCell(s.rollNo || ''),
       marksVal !== '' ? marksVal : '',
-      feedbackEscaped,
+      escapeCsvCell(rawFeedback),
     ];
   });
 
-  return [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
+  return '\uFEFF' + [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
 }
 
 /**
