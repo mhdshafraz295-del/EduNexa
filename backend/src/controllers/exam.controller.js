@@ -1283,6 +1283,7 @@ export const getStudentExams = async (req, res) => {
         studentEnrollments: {
           where: { status: 'ACTIVE' },
         },
+        studentSubjects: true,
       },
     });
 
@@ -1290,7 +1291,12 @@ export const getStudentExams = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Student profile not found.' });
     }
 
-    const enrolledClassIds = student.studentEnrollments.map((e) => e.classId);
+    const enrolledClassIds = Array.from(
+      new Set([
+        ...student.studentEnrollments.map((e) => e.classId),
+        student.classId,
+      ].filter(Boolean))
+    );
 
     if (enrolledClassIds.length === 0) {
       return res.json({
@@ -1326,7 +1332,18 @@ export const getStudentExams = async (req, res) => {
     const available = [];
     const completed = [];
 
+    const assignedSubjectIds = student.subjectsConfigured
+      ? new Set(student.studentSubjects.map((ss) => ss.subjectId))
+      : null;
+
     for (const exam of exams) {
+      // Per-student subject enrollment check
+      if (student.subjectsConfigured && exam.subjectId) {
+        if (!assignedSubjectIds.has(exam.subjectId)) {
+          continue; // Student is not enrolled in this exam's subject
+        }
+      }
+
       const startTime = exam.startDateTime ? new Date(exam.startDateTime) : new Date(exam.createdAt);
       const endTime = exam.endDateTime ? new Date(exam.endDateTime) : null;
       const userAttempts = exam.attempts || [];
@@ -1403,6 +1420,7 @@ export const getStudentExamInstructions = async (req, res) => {
       where: { userId: req.user.id, instituteId },
       include: {
         studentEnrollments: { where: { status: 'ACTIVE' } },
+        studentSubjects: true,
       },
     });
 
@@ -1433,9 +1451,16 @@ export const getStudentExamInstructions = async (req, res) => {
       return res.status(400).json({ success: false, message: 'This exam is not published.' });
     }
 
-    const isEnrolled = student.studentEnrollments.some((e) => e.classId === exam.classId);
+    const isEnrolled = student.studentEnrollments.some((e) => e.classId === exam.classId) || student.classId === exam.classId;
     if (!isEnrolled) {
       return res.status(403).json({ success: false, message: 'You are not enrolled in the class for this exam.' });
+    }
+
+    if (student.subjectsConfigured && exam.subjectId) {
+      const isEnrolledInSubject = student.studentSubjects.some((ss) => ss.subjectId === exam.subjectId);
+      if (!isEnrolledInSubject) {
+        return res.status(403).json({ success: false, message: 'You are not enrolled in the subject for this exam.' });
+      }
     }
 
     const activeAttempt = (exam.attempts || []).find((a) => a.status === 'IN_PROGRESS');
@@ -1484,6 +1509,7 @@ export const startOrResumeStudentExam = async (req, res) => {
       where: { userId: req.user.id, instituteId },
       include: {
         studentEnrollments: { where: { status: 'ACTIVE' } },
+        studentSubjects: true,
       },
     });
 
@@ -1510,12 +1536,22 @@ export const startOrResumeStudentExam = async (req, res) => {
     }
 
     // Verify student enrollment in target class
-    const isEnrolled = student.studentEnrollments.some((e) => e.classId === exam.classId);
+    const isEnrolled = student.studentEnrollments.some((e) => e.classId === exam.classId) || student.classId === exam.classId;
     if (!isEnrolled) {
       return res.status(403).json({
         success: false,
         message: 'You are not enrolled in the class for this exam.',
       });
+    }
+
+    if (student.subjectsConfigured && exam.subjectId) {
+      const isEnrolledInSubject = student.studentSubjects.some((ss) => ss.subjectId === exam.subjectId);
+      if (!isEnrolledInSubject) {
+        return res.status(403).json({
+          success: false,
+          message: 'You are not enrolled in the subject for this exam.',
+        });
+      }
     }
 
     const now = new Date();
@@ -2226,6 +2262,7 @@ export const getParentChildExams = async (req, res) => {
             student: {
               include: {
                 studentEnrollments: { where: { status: 'ACTIVE' } },
+                studentSubjects: true,
               },
             },
           },
@@ -2255,7 +2292,12 @@ export const getParentChildExams = async (req, res) => {
       });
     }
 
-    const enrolledClassIds = targetChild.studentEnrollments.map((e) => e.classId);
+    const enrolledClassIds = Array.from(
+      new Set([
+        ...targetChild.studentEnrollments.map((e) => e.classId),
+        targetChild.classId,
+      ].filter(Boolean))
+    );
 
     if (enrolledClassIds.length === 0) {
       return res.json({
@@ -2291,7 +2333,17 @@ export const getParentChildExams = async (req, res) => {
     const available = [];
     const completed = [];
 
+    const assignedSubjectIds = targetChild.subjectsConfigured
+      ? new Set(targetChild.studentSubjects.map((ss) => ss.subjectId))
+      : null;
+
     for (const exam of exams) {
+      // Per-student subject enrollment check
+      if (targetChild.subjectsConfigured && exam.subjectId) {
+        if (!assignedSubjectIds.has(exam.subjectId)) {
+          continue; // Student is not enrolled in this exam's subject
+        }
+      }
       const startTime = exam.startDateTime ? new Date(exam.startDateTime) : new Date(exam.createdAt);
       const endTime = exam.endDateTime ? new Date(exam.endDateTime) : null;
       const userAttempts = exam.attempts || [];
@@ -2399,6 +2451,9 @@ export const submitWrittenExamAnswer = async (req, res) => {
 
     const student = await prisma.student.findFirst({
       where: { userId: req.user.id, instituteId },
+      include: {
+        studentSubjects: true,
+      },
     });
 
     if (!student) {
@@ -2434,10 +2489,18 @@ export const submitWrittenExamAnswer = async (req, res) => {
       return res.status(400).json({ success: false, message: 'This examination is an MCQ exam and does not accept written answer uploads.' });
     }
 
-    const isEnrolled = exam.class?.studentEnrollments?.length > 0;
+    const isEnrolled = (exam.class?.studentEnrollments?.length > 0) || student.classId === exam.classId;
     if (!isEnrolled) {
       cleanupRequestFiles(req);
       return res.status(403).json({ success: false, message: 'You are not enrolled in this exam class.' });
+    }
+
+    if (student.subjectsConfigured && exam.subjectId) {
+      const isEnrolledInSubject = student.studentSubjects.some((ss) => ss.subjectId === exam.subjectId);
+      if (!isEnrolledInSubject) {
+        cleanupRequestFiles(req);
+        return res.status(403).json({ success: false, message: 'You are not enrolled in the subject for this exam.' });
+      }
     }
 
     // Validate active attempt & deadline
