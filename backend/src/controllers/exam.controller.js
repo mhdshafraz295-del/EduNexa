@@ -2910,15 +2910,27 @@ export const getExamSubmissions = async (req, res) => {
       include: {
         class: {
           include: {
+            students: {
+              select: {
+                id: true,
+                instituteId: true,
+                name: true,
+                admissionNumber: true,
+                rollNo: true,
+                subjectsConfigured: true,
+              },
+            },
             studentEnrollments: {
               where: { status: 'ACTIVE' },
               include: {
                 student: {
                   select: {
                     id: true,
+                    instituteId: true,
                     name: true,
                     admissionNumber: true,
                     rollNo: true,
+                    subjectsConfigured: true,
                     user: { select: { email: true } },
                   },
                 },
@@ -2929,7 +2941,7 @@ export const getExamSubmissions = async (req, res) => {
         attempts: {
           include: {
             student: {
-              select: { id: true, name: true, admissionNumber: true, rollNo: true },
+              select: { id: true, instituteId: true, name: true, admissionNumber: true, rollNo: true, subjectsConfigured: true },
             },
           },
           orderBy: { startedAt: 'desc' },
@@ -2954,7 +2966,6 @@ export const getExamSubmissions = async (req, res) => {
       }
     }
 
-    const enrolledStudents = (exam.class?.studentEnrollments || []).map((e) => e.student);
     const attemptsMap = new Map();
     exam.attempts.forEach((a) => {
       if (!attemptsMap.has(a.studentId)) attemptsMap.set(a.studentId, a);
@@ -2965,7 +2976,50 @@ export const getExamSubmissions = async (req, res) => {
       resultsMap.set(r.studentId, r);
     });
 
-    const submissions = enrolledStudents.map((std) => {
+    // Gather candidate students from all enrollment sources and actual exam attempts for this tenant
+    const studentMap = new Map();
+
+    (exam.class?.studentEnrollments || []).forEach((e) => {
+      if (e.student && e.student.id && e.student.instituteId === instituteId) {
+        studentMap.set(e.student.id, e.student);
+      }
+    });
+
+    (exam.class?.students || []).forEach((std) => {
+      if (std && std.id && std.instituteId === instituteId && !studentMap.has(std.id)) {
+        studentMap.set(std.id, std);
+      }
+    });
+
+    (exam.attempts || []).forEach((a) => {
+      if (a.student && a.student.id && a.student.instituteId === instituteId && !studentMap.has(a.student.id)) {
+        studentMap.set(a.student.id, a.student);
+      }
+    });
+
+    // Fetch StudentSubject records for configured students to filter by subject enrollment
+    const studentIds = Array.from(studentMap.keys());
+    const configuredStudentSubjects = exam.subjectId && studentIds.length > 0
+      ? await prisma.studentSubject.findMany({
+          where: { studentId: { in: studentIds }, instituteId },
+        })
+      : [];
+
+    const studentSubjectSet = new Set(configuredStudentSubjects.map((ss) => `${ss.studentId}_${ss.subjectId}`));
+
+    const candidateStudents = Array.from(studentMap.values()).filter((std) => {
+      // Always include if student submitted an attempt or has a result record for this exam
+      if (attemptsMap.has(std.id) || resultsMap.has(std.id)) {
+        return true;
+      }
+      // If student has per-student subject assignment configured, verify subject match
+      if (std.subjectsConfigured && exam.subjectId) {
+        return studentSubjectSet.has(`${std.id}_${exam.subjectId}`);
+      }
+      return true;
+    });
+
+    const submissions = candidateStudents.map((std) => {
       const attempt = attemptsMap.get(std.id) || null;
       const resRecord = resultsMap.get(std.id) || null;
 
